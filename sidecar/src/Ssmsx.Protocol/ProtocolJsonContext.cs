@@ -54,6 +54,28 @@ namespace Ssmsx.Protocol;
 [JsonSerializable(typeof(ExplorerFunctionsParams))]
 [JsonSerializable(typeof(ExplorerUsersParams))]
 [JsonSerializable(typeof(ExplorerObjectDefinitionParams))]
+// IntelliSense DTOs
+[JsonSerializable(typeof(IntelliSenseGetMetadataParams))]
+[JsonSerializable(typeof(IntelliSenseMetadata))]
+[JsonSerializable(typeof(IntelliSenseTable))]
+[JsonSerializable(typeof(List<IntelliSenseTable>))]
+[JsonSerializable(typeof(IntelliSenseColumn))]
+[JsonSerializable(typeof(List<IntelliSenseColumn>))]
+[JsonSerializable(typeof(IntelliSenseProcedure))]
+[JsonSerializable(typeof(List<IntelliSenseProcedure>))]
+[JsonSerializable(typeof(IntelliSenseFunction))]
+[JsonSerializable(typeof(List<IntelliSenseFunction>))]
+// Query DTOs
+[JsonSerializable(typeof(QueryColumn))]
+[JsonSerializable(typeof(List<QueryColumn>))]
+[JsonSerializable(typeof(QueryMessage))]
+[JsonSerializable(typeof(List<QueryMessage>))]
+[JsonSerializable(typeof(QueryExecuteParams))]
+[JsonSerializable(typeof(QueryExecuteResult))]
+[JsonSerializable(typeof(QueryCancelParams))]
+[JsonSerializable(typeof(QueryCancelResult))]
+[JsonSerializable(typeof(List<List<object?>>))]
+[JsonSerializable(typeof(List<object?>))]
 [JsonSerializable(typeof(List<string>))]
 [JsonSourceGenerationOptions(
     PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase,

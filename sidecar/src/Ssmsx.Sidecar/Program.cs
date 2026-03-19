@@ -6,6 +6,7 @@ using Ssmsx.Core.Storage;
 using Ssmsx.Core.Connections;
 using Ssmsx.Core.Credentials;
 using Ssmsx.Core.Explorer;
+using Ssmsx.Core.Query;
 
 // Disable stdout buffering for real-time communication
 Console.OutputEncoding = System.Text.Encoding.UTF8;
@@ -15,6 +16,9 @@ var connectionStore = new ConnectionStore();
 var credentialStore = CredentialStoreFactory.Create();
 var connectionManager = new ConnectionManager();
 var schemaDiscovery = new SchemaDiscoveryService(connectionManager);
+var queryCancellationManager = new QueryCancellationManager();
+var queryExecutor = new QueryExecutor(connectionManager, queryCancellationManager);
+var intelliSenseService = new IntelliSenseService(connectionManager);
 
 var handlers = new Dictionary<string, Func<JsonElement?, Task<JsonElement>>>
 {
@@ -206,6 +210,73 @@ var handlers = new Dictionary<string, Func<JsonElement?, Task<JsonElement>>>
         var args = Deserialize<ExplorerObjectDefinitionParams>(p, ProtocolJsonContext.Default.ExplorerObjectDefinitionParams);
         var result = await schemaDiscovery.GetObjectDefinitionAsync(args.ConnectionId, args.Database, args.Schema, args.ObjectName, args.ObjectType);
         return JsonSerializer.SerializeToElement(result, ProtocolJsonContext.Default.ObjectScriptResult);
+    },
+
+    // IntelliSense methods
+    ["intellisense.getMetadata"] = async p =>
+    {
+        var args = Deserialize<IntelliSenseGetMetadataParams>(p, ProtocolJsonContext.Default.IntelliSenseGetMetadataParams);
+        var result = await intelliSenseService.GetMetadataAsync(args.ConnectionId, args.Database);
+        return JsonSerializer.SerializeToElement(result, ProtocolJsonContext.Default.IntelliSenseMetadata);
+    },
+
+    // Query methods
+    ["query.cancel"] = async p =>
+    {
+        var args = Deserialize<QueryCancelParams>(p, ProtocolJsonContext.Default.QueryCancelParams);
+        var cancelled = queryCancellationManager.Cancel(args.QueryId);
+        return JsonSerializer.SerializeToElement(
+            new QueryCancelResult { Cancelled = cancelled },
+            ProtocolJsonContext.Default.QueryCancelResult);
+    }
+};
+
+// Lock object to prevent interleaving of JSON-RPC responses on stdout
+var writerLock = new object();
+
+// Streaming handlers: these write multiple JSON-RPC responses for a single request
+var streamingHandlers = new Dictionary<string, Func<string, JsonElement?, StreamWriter, Task>>
+{
+    ["query.execute"] = async (requestId, p, w) =>
+    {
+        var args = Deserialize<QueryExecuteParams>(p, ProtocolJsonContext.Default.QueryExecuteParams);
+        var queryId = Guid.NewGuid().ToString();
+        using var cts = new CancellationTokenSource();
+        queryCancellationManager.Register(queryId, cts);
+
+        try
+        {
+            await queryExecutor.ExecuteAsync(
+                args.ConnectionId,
+                args.Database,
+                args.Sql,
+                queryId,
+                async batch =>
+                {
+                    var resultElement = JsonSerializer.SerializeToElement(batch, ProtocolJsonContext.Default.QueryExecuteResult);
+                    var response = new JsonRpcResponse { Id = requestId, Result = resultElement };
+                    var json = JsonSerializer.Serialize(response, ProtocolJsonContext.Default.JsonRpcResponse);
+                    lock (writerLock)
+                    {
+                        w.WriteLine(json);
+                    }
+                },
+                cts.Token);
+        }
+        catch (Exception ex)
+        {
+            await Console.Error.WriteLineAsync($"Error executing query '{queryId}': {ex.Message}");
+            var errorResponse = new JsonRpcResponse
+            {
+                Id = requestId,
+                Error = new JsonRpcError { Code = "QUERY_ERROR", Message = ex.Message }
+            };
+            var errorJson = JsonSerializer.Serialize(errorResponse, ProtocolJsonContext.Default.JsonRpcResponse);
+            lock (writerLock)
+            {
+                w.WriteLine(errorJson);
+            }
+        }
     }
 };
 
@@ -236,6 +307,13 @@ while ((line = Console.ReadLine()) is not null)
         }
 
         requestId = request.Id;
+
+        // Check streaming handlers first — they write their own responses
+        if (streamingHandlers.TryGetValue(request.Method, out var streamHandler))
+        {
+            await streamHandler(request.Id, request.Params, writer);
+            continue;
+        }
 
         if (handlers.TryGetValue(request.Method, out var handler))
         {

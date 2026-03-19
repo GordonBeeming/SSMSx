@@ -1,0 +1,136 @@
+import { useEffect, useCallback, useState } from "react";
+import { useQueryStore } from "../store/queryStore";
+import { QueryEditor } from "./QueryEditor";
+import { QueryStatusBar } from "./QueryStatusBar";
+import { QueryResultsTable } from "./QueryResultsTable";
+import {
+  onQueryResults,
+  onQueryComplete,
+  onQueryError,
+  type IntelliSenseMetadata,
+} from "../api/queryApi";
+
+export function QueryPanel() {
+  const { activeTabId, tabs, tabSql, updateSql, executeQuery, results, loadIntelliSense } =
+    useQueryStore();
+
+  const activeTab = tabs.find((t) => t.id === activeTabId);
+  const activeSql = activeTabId ? tabSql[activeTabId] ?? "" : "";
+  const activeResult = activeTabId ? results[activeTabId] : undefined;
+
+  // IntelliSense metadata for the active tab's connection/database
+  const [intellisenseMetadata, setIntellisenseMetadata] =
+    useState<IntelliSenseMetadata | null>(null);
+
+  useEffect(() => {
+    if (!activeTab) {
+      setIntellisenseMetadata(null);
+      return;
+    }
+
+    let cancelled = false;
+    loadIntelliSense(activeTab.connectionId, activeTab.database).then(
+      (metadata) => {
+        if (!cancelled) {
+          setIntellisenseMetadata(metadata ?? null);
+        }
+      }
+    );
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeTab?.connectionId, activeTab?.database, loadIntelliSense]);
+
+  // Subscribe to Tauri events for streaming results
+  useEffect(() => {
+    const unlisteners: Array<() => void> = [];
+
+    const setup = async () => {
+      const store = useQueryStore.getState();
+
+      const unlisten1 = await onQueryResults((payload) => {
+        store.handleResultsBatch(payload);
+      });
+      unlisteners.push(unlisten1);
+
+      const unlisten2 = await onQueryComplete((payload) => {
+        store.handleQueryComplete(payload);
+      });
+      unlisteners.push(unlisten2);
+
+      const unlisten3 = await onQueryError((payload) => {
+        const id = payload.queryId ?? "";
+        store.handleQueryError(id, payload.error);
+      });
+      unlisteners.push(unlisten3);
+    };
+
+    setup().catch((e) =>
+      console.error("Failed to set up query event listeners:", e)
+    );
+
+    return () => {
+      for (const unlisten of unlisteners) {
+        unlisten();
+      }
+    };
+  }, []);
+
+  const handleChange = useCallback(
+    (value: string) => {
+      if (activeTabId) {
+        updateSql(activeTabId, value);
+      }
+    },
+    [activeTabId, updateSql]
+  );
+
+  const handleExecute = useCallback(() => {
+    if (activeTabId) {
+      executeQuery(activeTabId);
+    }
+  }, [activeTabId, executeQuery]);
+
+  const handleExecuteSelection = useCallback(
+    (sql: string) => {
+      if (activeTabId) {
+        executeQuery(activeTabId, sql);
+      }
+    },
+    [activeTabId, executeQuery]
+  );
+
+  if (!activeTab || !activeTabId) {
+    return null;
+  }
+
+  const hasResults =
+    activeResult &&
+    (activeResult.columns.length > 0 || activeResult.messages.length > 0);
+
+  return (
+    <div className="flex flex-1 flex-col overflow-hidden">
+      {/* Editor area */}
+      <div className={`flex-1 ${hasResults ? "min-h-[120px]" : ""}`}>
+        <QueryEditor
+          value={activeSql}
+          onChange={handleChange}
+          onExecute={handleExecute}
+          onExecuteSelection={handleExecuteSelection}
+          intellisenseMetadata={intellisenseMetadata}
+        />
+      </div>
+
+      {/* Results area */}
+      {hasResults && (
+        <div className="flex max-h-[50%] flex-col overflow-hidden border-t border-bg-tertiary">
+          <QueryResultsTable result={activeResult} />
+        </div>
+      )}
+
+      {/* Status bar */}
+      <QueryStatusBar tabId={activeTabId} />
+    </div>
+  );
+}

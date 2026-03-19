@@ -1,2 +1,10 @@
 export { useQueryStore } from "./store/queryStore";
-export type { QueryTab } from "./types";
+export { QueryPanel } from "./components/QueryPanel";
+export { QueryTabBar } from "./components/QueryTabBar";
+export type {
+  QueryTab,
+  QueryColumn,
+  QueryMessage,
+  QueryResult,
+  QueryExecutionState,
+} from "./types";

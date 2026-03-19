@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
-use tokio::sync::{Mutex, oneshot};
+use tokio::sync::{Mutex, oneshot, mpsc};
 use tauri::AppHandle;
 use tauri_plugin_shell::ShellExt;
 use tauri_plugin_shell::process::{CommandChild, CommandEvent};
@@ -15,6 +15,7 @@ const REQUEST_TIMEOUT_SECS: u64 = 30;
 pub struct SidecarManager {
     child: Arc<Mutex<Option<CommandChild>>>,
     pending: Arc<Mutex<HashMap<String, oneshot::Sender<Result<Value, String>>>>>,
+    pending_stream: Arc<Mutex<HashMap<String, mpsc::UnboundedSender<Result<Value, String>>>>>,
     running: Arc<AtomicBool>,
 }
 
@@ -23,6 +24,7 @@ impl SidecarManager {
         Self {
             child: Arc::new(Mutex::new(None)),
             pending: Arc::new(Mutex::new(HashMap::new())),
+            pending_stream: Arc::new(Mutex::new(HashMap::new())),
             running: Arc::new(AtomicBool::new(false)),
         }
     }
@@ -41,6 +43,7 @@ impl SidecarManager {
         self.running.store(true, Ordering::SeqCst);
 
         let pending = self.pending.clone();
+        let pending_stream = self.pending_stream.clone();
         let running = self.running.clone();
         let child_handle = self.child.clone();
 
@@ -59,18 +62,42 @@ impl SidecarManager {
                         match serde_json::from_str::<Value>(line) {
                             Ok(response) => {
                                 if let Some(id) = response.get("id").and_then(|v| v.as_str()) {
-                                    let mut pending = pending.lock().await;
-                                    if let Some(sender) = pending.remove(id) {
+                                    // First check streaming requests
+                                    let mut stream_pending = pending_stream.lock().await;
+                                    if let Some(sender) = stream_pending.get(id) {
                                         if let Some(error) = response.get("error") {
                                             let msg = error
                                                 .get("message")
                                                 .and_then(|v| v.as_str())
                                                 .unwrap_or("Unknown error");
+                                            log::error!("Streaming request '{}' received error: {}", id, msg);
                                             let _ = sender.send(Err(msg.to_string()));
-                                        } else if let Some(result) = response.get("result") {
-                                            let _ = sender.send(Ok(result.clone()));
+                                            stream_pending.remove(id);
                                         } else {
-                                            let _ = sender.send(Ok(Value::Null));
+                                            let result = response.get("result").cloned().unwrap_or(Value::Null);
+                                            let done = result.get("done").and_then(|v| v.as_bool()).unwrap_or(false);
+                                            let _ = sender.send(Ok(result));
+                                            if done {
+                                                log::debug!("Streaming request '{}' completed (done=true)", id);
+                                                stream_pending.remove(id);
+                                            }
+                                        }
+                                    } else {
+                                        drop(stream_pending);
+                                        // Fall back to oneshot pending requests
+                                        let mut pending = pending.lock().await;
+                                        if let Some(sender) = pending.remove(id) {
+                                            if let Some(error) = response.get("error") {
+                                                let msg = error
+                                                    .get("message")
+                                                    .and_then(|v| v.as_str())
+                                                    .unwrap_or("Unknown error");
+                                                let _ = sender.send(Err(msg.to_string()));
+                                            } else if let Some(result) = response.get("result") {
+                                                let _ = sender.send(Ok(result.clone()));
+                                            } else {
+                                                let _ = sender.send(Ok(Value::Null));
+                                            }
                                         }
                                     }
                                 }
@@ -89,9 +116,15 @@ impl SidecarManager {
                         // Mark as not running and clear child handle
                         running.store(false, Ordering::SeqCst);
                         *child_handle.lock().await = None;
-                        // Drain all pending requests so callers fail fast
+                        // Drain all pending oneshot requests so callers fail fast
                         let mut pending = pending.lock().await;
                         for (_, sender) in pending.drain() {
+                            let _ = sender.send(Err("Sidecar process terminated".to_string()));
+                        }
+                        // Drain all pending streaming requests
+                        let mut stream_pending = pending_stream.lock().await;
+                        for (id, sender) in stream_pending.drain() {
+                            log::warn!("Draining streaming request '{}' due to sidecar termination", id);
                             let _ = sender.send(Err("Sidecar process terminated".to_string()));
                         }
                         break;
@@ -181,5 +214,68 @@ impl SidecarManager {
                 ))
             }
         }
+    }
+
+    /// Send a streaming request to the sidecar. Unlike `send_request`, this returns an
+    /// unbounded receiver that yields multiple response batches until the sidecar sends
+    /// a response with `done: true`. The caller is responsible for consuming the receiver.
+    /// Returns the request ID (for tracking/cancellation) and the receiver.
+    pub async fn send_streaming_request(
+        &self,
+        method: &str,
+        params: Option<Value>,
+    ) -> Result<(String, mpsc::UnboundedReceiver<Result<Value, String>>), String> {
+        let id = uuid::Uuid::new_v4().to_string();
+
+        let request = serde_json::json!({
+            "id": id,
+            "method": method,
+            "params": params
+        });
+
+        let request_line = format!("{}\n", serde_json::to_string(&request).map_err(|e| {
+            format!("Failed to serialize streaming request for method '{}': {}", method, e)
+        })?);
+
+        let (tx, rx) = mpsc::unbounded_channel();
+
+        if !self.running.load(Ordering::SeqCst) {
+            return Err(format!(
+                "Sidecar not running — cannot send streaming request for method '{}'",
+                method
+            ));
+        }
+
+        log::debug!("Sending streaming request '{}' for method '{}'", id, method);
+
+        // Insert into pending_stream before write so the reader task can match responses
+        {
+            let mut pending_stream = self.pending_stream.lock().await;
+            pending_stream.insert(id.clone(), tx);
+        }
+
+        // Write to sidecar — clean up pending_stream on failure
+        {
+            let mut child_lock = self.child.lock().await;
+            if let Some(child) = child_lock.as_mut() {
+                if let Err(e) = child.write(request_line.as_bytes()) {
+                    let mut pending_stream = self.pending_stream.lock().await;
+                    pending_stream.remove(&id);
+                    return Err(format!(
+                        "Failed to write to sidecar for streaming method '{}': {}",
+                        method, e
+                    ));
+                }
+            } else {
+                let mut pending_stream = self.pending_stream.lock().await;
+                pending_stream.remove(&id);
+                return Err(format!(
+                    "Sidecar not running — cannot send streaming request for method '{}'",
+                    method
+                ));
+            }
+        }
+
+        Ok((id, rx))
     }
 }

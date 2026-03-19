@@ -51,6 +51,9 @@ pub fn run() {
             commands::explorer::explorer_functions,
             commands::explorer::explorer_users,
             commands::explorer::explorer_object_definition,
+            commands::query::query_execute,
+            commands::query::query_cancel,
+            commands::query::intellisense_get_metadata,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
