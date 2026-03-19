@@ -244,6 +244,24 @@ var streamingHandlers = new Dictionary<string, Func<string, JsonElement?, Stream
         using var cts = new CancellationTokenSource();
         queryCancellationManager.Register(queryId, cts);
 
+        // Send an immediate "started" batch so the frontend knows the queryId
+        // (needed for cancellation before any data arrives)
+        {
+            var startBatch = new QueryExecuteResult
+            {
+                QueryId = queryId,
+                Batch = 0,
+                Done = false
+            };
+            var startElement = JsonSerializer.SerializeToElement(startBatch, ProtocolJsonContext.Default.QueryExecuteResult);
+            var startResponse = new JsonRpcResponse { Id = requestId, Result = startElement };
+            var startJson = JsonSerializer.Serialize(startResponse, ProtocolJsonContext.Default.JsonRpcResponse);
+            lock (writerLock)
+            {
+                w.WriteLine(startJson);
+            }
+        }
+
         try
         {
             await queryExecutor.ExecuteAsync(
@@ -308,10 +326,24 @@ while ((line = Console.ReadLine()) is not null)
 
         requestId = request.Id;
 
-        // Check streaming handlers first — they write their own responses
+        // Check streaming handlers first — they write their own responses.
+        // Fire-and-forget so the main loop can continue processing other requests
+        // (e.g. query.cancel while a query is running).
         if (streamingHandlers.TryGetValue(request.Method, out var streamHandler))
         {
-            await streamHandler(request.Id, request.Params, writer);
+            var capturedId = request.Id;
+            var capturedParams = request.Params;
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await streamHandler(capturedId, capturedParams, writer);
+                }
+                catch (Exception ex)
+                {
+                    await Console.Error.WriteLineAsync($"Unhandled error in streaming handler for request '{capturedId}': {ex.Message}");
+                }
+            });
             continue;
         }
 

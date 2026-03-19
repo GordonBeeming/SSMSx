@@ -43,26 +43,30 @@ export function QueryPanel() {
     };
   }, [activeTab?.connectionId, activeTab?.database, loadIntelliSense]);
 
-  // Subscribe to Tauri events for streaming results
+  // Subscribe to Tauri events for streaming results.
+  // Uses a cancelled flag to prevent double-registration in React strict mode
+  // (where the async setup can complete after the cleanup has already run).
   useEffect(() => {
+    let cancelled = false;
     const unlisteners: Array<() => void> = [];
 
     const setup = async () => {
-      const store = useQueryStore.getState();
-
       const unlisten1 = await onQueryResults((payload) => {
-        store.handleResultsBatch(payload);
+        if (!cancelled) useQueryStore.getState().handleResultsBatch(payload);
       });
+      if (cancelled) { unlisten1(); return; }
       unlisteners.push(unlisten1);
 
       const unlisten2 = await onQueryComplete((payload) => {
-        store.handleQueryComplete(payload);
+        if (!cancelled) useQueryStore.getState().handleQueryComplete(payload);
       });
+      if (cancelled) { unlisten2(); return; }
       unlisteners.push(unlisten2);
 
       const unlisten3 = await onQueryError((payload) => {
-        store.handleQueryError(payload.queryId, payload.requestId, payload.error);
+        if (!cancelled) useQueryStore.getState().handleQueryError(payload.queryId, payload.requestId, payload.error);
       });
+      if (cancelled) { unlisten3(); return; }
       unlisteners.push(unlisten3);
     };
 
@@ -71,6 +75,7 @@ export function QueryPanel() {
     );
 
     return () => {
+      cancelled = true;
       for (const unlisten of unlisteners) {
         unlisten();
       }
