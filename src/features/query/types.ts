@@ -30,9 +30,10 @@ export interface QueryTab {
   connectionColor?: string;
 }
 
-/** Payload shape from the sidecar streaming batches */
+/** Payload shape from the sidecar streaming batches (with requestId injected by Rust) */
 export interface QueryBatchPayload {
   queryId: string;
+  requestId?: string;
   columns?: QueryColumn[];
   rows?: unknown[][];
   batch: number;
@@ -46,5 +47,6 @@ export interface QueryBatchPayload {
 /** Payload for query:error events */
 export interface QueryErrorPayload {
   queryId?: string;
+  requestId?: string;
   error: string;
 }

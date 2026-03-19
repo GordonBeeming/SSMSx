@@ -28,7 +28,9 @@ pub async fn query_execute(
 
     let rid = request_id.clone();
 
-    // Spawn a task to read batches and emit Tauri events
+    // Spawn a task to read batches and emit Tauri events.
+    // Each payload gets the requestId injected so the frontend can match
+    // events to tabs (the sidecar's queryId is different from requestId).
     tauri::async_runtime::spawn(async move {
         while let Some(result) = rx.recv().await {
             match result {
@@ -36,14 +38,19 @@ pub async fn query_execute(
                     let done = value.get("done").and_then(|v| v.as_bool()).unwrap_or(false);
                     let has_error = value.get("error").is_some();
 
+                    // Inject requestId into the payload so frontend can correlate
+                    let mut payload = value.as_object().cloned().unwrap_or_default();
+                    payload.insert("requestId".to_string(), serde_json::Value::String(rid.clone()));
+                    let payload = serde_json::Value::Object(payload);
+
                     if has_error {
                         log::warn!("Query '{}' returned an error payload", rid);
-                        let _ = app_handle.emit("query:error", &value);
+                        let _ = app_handle.emit("query:error", &payload);
                     } else if done {
                         log::debug!("Query '{}' completed", rid);
-                        let _ = app_handle.emit("query:complete", &value);
+                        let _ = app_handle.emit("query:complete", &payload);
                     } else {
-                        let _ = app_handle.emit("query:results", &value);
+                        let _ = app_handle.emit("query:results", &payload);
                     }
 
                     // If done or error, stop listening

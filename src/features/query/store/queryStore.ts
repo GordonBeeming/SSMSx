@@ -45,7 +45,7 @@ interface QueryState {
   // Streaming event handlers
   handleResultsBatch: (payload: QueryBatchPayload) => void;
   handleQueryComplete: (payload: QueryBatchPayload) => void;
-  handleQueryError: (queryIdOrRequestId: string, error: string) => void;
+  handleQueryError: (queryId: string | undefined, requestId: string | undefined, error: string) => void;
 
   // IntelliSense
   loadIntelliSense: (connectionId: string, database: string) => Promise<IntelliSenseMetadata | null>;
@@ -65,14 +65,18 @@ function emptyResult(): QueryResult {
   };
 }
 
-/** Find the tab that owns a given queryId or requestId */
-function findTabByQueryOrRequest(
+/** Find the tab that owns a given queryId or requestId.
+ *  Accepts multiple IDs to try (e.g. both queryId and requestId from the payload). */
+function findTabByIds(
   executionInfo: Record<string, TabExecutionInfo>,
-  id: string
+  ...ids: (string | undefined | null)[]
 ): string | null {
+  const candidates = ids.filter((id): id is string => typeof id === "string" && id.length > 0);
   for (const [tabId, info] of Object.entries(executionInfo)) {
-    if (info.queryId === id || info.requestId === id) {
-      return tabId;
+    for (const id of candidates) {
+      if (info.queryId === id || info.requestId === id) {
+        return tabId;
+      }
     }
   }
   return null;
@@ -254,7 +258,7 @@ export const useQueryStore = create<QueryState>((set, get) => ({
   },
 
   handleResultsBatch: (payload) => {
-    const tabId = findTabByQueryOrRequest(get().executionInfo, payload.queryId);
+    const tabId = findTabByIds(get().executionInfo, payload.queryId, payload.requestId);
     if (!tabId) return;
 
     set((s) => {
@@ -292,7 +296,7 @@ export const useQueryStore = create<QueryState>((set, get) => ({
   },
 
   handleQueryComplete: (payload) => {
-    const tabId = findTabByQueryOrRequest(get().executionInfo, payload.queryId);
+    const tabId = findTabByIds(get().executionInfo, payload.queryId, payload.requestId);
     if (!tabId) return;
 
     set((s) => {
@@ -336,10 +340,11 @@ export const useQueryStore = create<QueryState>((set, get) => ({
     });
   },
 
-  handleQueryError: (queryIdOrRequestId, error) => {
-    const tabId = findTabByQueryOrRequest(
+  handleQueryError: (queryId, requestId, error) => {
+    const tabId = findTabByIds(
       get().executionInfo,
-      queryIdOrRequestId
+      queryId,
+      requestId
     );
     if (!tabId) return;
 

@@ -61,8 +61,7 @@ export function QueryPanel() {
       unlisteners.push(unlisten2);
 
       const unlisten3 = await onQueryError((payload) => {
-        const id = payload.queryId ?? "";
-        store.handleQueryError(id, payload.error);
+        store.handleQueryError(payload.queryId, payload.requestId, payload.error);
       });
       unlisteners.push(unlisten3);
     };
