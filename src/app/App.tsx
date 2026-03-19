@@ -1,9 +1,14 @@
 import { useEffect, useCallback } from "react";
+import { listen } from "@tauri-apps/api/event";
 import { useConnectionStore, ConnectionDialog } from "../features/connection";
 import { useQueryStore, QueryPanel, QueryTabBar } from "../features/query";
 import { ObjectExplorerTree } from "../features/explorer";
 
 let tabCounter = 0;
+
+function isMac(): boolean {
+  return navigator.platform.toUpperCase().includes("MAC");
+}
 
 function App() {
   const {
@@ -43,28 +48,92 @@ function App() {
     return () => window.removeEventListener("query:new-tab", handler);
   }, [createNewTab]);
 
-  // Global keyboard shortcuts
+  // Listen for native menu events from Tauri
+  useEffect(() => {
+    const unlisteners: Array<() => void> = [];
+
+    const setup = async () => {
+      // File > New Query
+      unlisteners.push(
+        await listen("menu:new-query", () => {
+          createNewTab();
+        })
+      );
+
+      // File > New Connection
+      unlisteners.push(
+        await listen("menu:new-connection", () => {
+          openDialog();
+        })
+      );
+
+      // File > Close Tab
+      unlisteners.push(
+        await listen("menu:close-tab", () => {
+          const store = useQueryStore.getState();
+          if (store.activeTabId) {
+            store.removeTab(store.activeTabId);
+          }
+        })
+      );
+
+      // Query > Execute
+      unlisteners.push(
+        await listen("menu:execute-query", () => {
+          const store = useQueryStore.getState();
+          if (store.activeTabId) {
+            store.executeQuery(store.activeTabId);
+          }
+        })
+      );
+
+      // Query > Execute Selection
+      unlisteners.push(
+        await listen("menu:execute-selection", () => {
+          window.dispatchEvent(new CustomEvent("query:execute-selection"));
+        })
+      );
+
+      // Query > Cancel
+      unlisteners.push(
+        await listen("menu:cancel-query", () => {
+          const store = useQueryStore.getState();
+          if (store.activeTabId) {
+            store.cancelQuery(store.activeTabId);
+          }
+        })
+      );
+    };
+
+    setup().catch((e) =>
+      console.error("Failed to set up menu event listeners:", e)
+    );
+
+    return () => {
+      for (const unlisten of unlisteners) {
+        unlisten();
+      }
+    };
+  }, [createNewTab, openDialog]);
+
+  // Global keyboard shortcuts (F5 for execute when editor is not focused)
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      // Ctrl+N — New query tab
-      if ((e.ctrlKey || e.metaKey) && e.key === "n") {
-        e.preventDefault();
-        createNewTab();
-      }
-
-      // Ctrl+W — Close current tab
-      if ((e.ctrlKey || e.metaKey) && e.key === "w") {
+      // F5 — Execute query (global fallback when editor doesn't have focus)
+      if (e.key === "F5") {
         e.preventDefault();
         const store = useQueryStore.getState();
         if (store.activeTabId) {
-          store.removeTab(store.activeTabId);
+          store.executeQuery(store.activeTabId);
         }
       }
     };
 
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [createNewTab]);
+  }, []);
+
+  const shortcutKey = isMac() ? "⌘" : "Ctrl";
 
   return (
     <div className="flex h-screen flex-col">
@@ -138,8 +207,8 @@ function App() {
                 </div>
               ) : (
                 <p className="text-sm text-text-secondary">
-                  Browse objects in the explorer, or press Ctrl+N for a new
-                  query.
+                  Browse objects in the explorer, or press {shortcutKey}+N for a
+                  new query.
                 </p>
               )}
             </div>

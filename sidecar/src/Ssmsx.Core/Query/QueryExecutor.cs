@@ -235,7 +235,7 @@ public class QueryExecutor
             {
                 Name = reader.GetName(i),
                 DataType = reader.GetDataTypeName(i),
-                IsNullable = reader.IsDBNull(i) || true, // We can't reliably check schema here; default to nullable
+                IsNullable = true, // Default to nullable; enriched by schema table below
                 MaxLength = null
             };
             columns.Add(column);

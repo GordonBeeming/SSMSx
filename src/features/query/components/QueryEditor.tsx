@@ -1,4 +1,4 @@
-import { useRef, useCallback, useEffect } from "react";
+import { useRef, useCallback, useEffect, useState } from "react";
 import Editor, { type OnMount, type Monaco } from "@monaco-editor/react";
 import type { editor as monacoEditor, IDisposable } from "monaco-editor";
 import { SqlCompletionProvider } from "./intellisense/SqlCompletionProvider";
@@ -12,6 +12,24 @@ interface QueryEditorProps {
   intellisenseMetadata?: IntelliSenseMetadata | null;
 }
 
+/** Detect system color scheme preference */
+function useColorScheme(): "vs" | "vs-dark" {
+  const [scheme, setScheme] = useState<"vs" | "vs-dark">(() =>
+    window.matchMedia("(prefers-color-scheme: dark)").matches ? "vs-dark" : "vs"
+  );
+
+  useEffect(() => {
+    const mq = window.matchMedia("(prefers-color-scheme: dark)");
+    const handler = (e: MediaQueryListEvent) => {
+      setScheme(e.matches ? "vs-dark" : "vs");
+    };
+    mq.addEventListener("change", handler);
+    return () => mq.removeEventListener("change", handler);
+  }, []);
+
+  return scheme;
+}
+
 export function QueryEditor({
   value,
   onChange,
@@ -23,6 +41,13 @@ export function QueryEditor({
   const completionProviderRef = useRef<SqlCompletionProvider | null>(null);
   const disposableRef = useRef<IDisposable | null>(null);
   const monacoRef = useRef<Monaco | null>(null);
+  const theme = useColorScheme();
+
+  // Keep latest callbacks in refs so Monaco actions always call the current ones
+  const onExecuteRef = useRef(onExecute);
+  onExecuteRef.current = onExecute;
+  const onExecuteSelectionRef = useRef(onExecuteSelection);
+  onExecuteSelectionRef.current = onExecuteSelection;
 
   // Update completion provider when metadata changes
   useEffect(() => {
@@ -30,6 +55,30 @@ export function QueryEditor({
       completionProviderRef.current.setMetadata(intellisenseMetadata ?? null);
     }
   }, [intellisenseMetadata]);
+
+  // Listen for toolbar "Execute Selection" button
+  useEffect(() => {
+    const handler = () => {
+      const editor = editorRef.current;
+      if (!editor) return;
+      const model = editor.getModel();
+      if (!model) return;
+
+      const selection = editor.getSelection();
+      let selectedText = "";
+      if (selection && !selection.isEmpty()) {
+        selectedText = model.getValueInRange(selection);
+      } else {
+        selectedText = getCurrentStatement(model, editor.getPosition());
+      }
+
+      if (selectedText.trim()) {
+        onExecuteSelectionRef.current(selectedText);
+      }
+    };
+    window.addEventListener("query:execute-selection", handler);
+    return () => window.removeEventListener("query:execute-selection", handler);
+  }, []);
 
   const handleMount: OnMount = useCallback(
     (editor, monaco) => {
@@ -49,23 +98,18 @@ export function QueryEditor({
       editor.addAction({
         id: "query-execute",
         label: "Execute Query",
-        keybindings: [
-          // Monaco KeyCode for F5 = 296 (KeyCode.F5)
-          296,
-        ],
+        keybindings: [monaco.KeyCode.F5],
         run: () => {
-          onExecute();
+          onExecuteRef.current();
         },
       });
 
-      // Ctrl+Shift+E — Execute selection or current statement
+      // Cmd/Ctrl+Shift+E — Execute selection or current statement
       editor.addAction({
         id: "query-execute-selection",
         label: "Execute Selection",
         keybindings: [
-          // Ctrl+Shift+E
-          // Monaco: CtrlCmd (2048) | Shift (1024) | KeyE (35)
-          2048 | 1024 | 35,
+          monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.KeyE,
         ],
         run: (ed) => {
           const selection = ed.getSelection();
@@ -81,14 +125,16 @@ export function QueryEditor({
           }
 
           if (selectedText.trim()) {
-            onExecuteSelection(selectedText);
+            onExecuteSelectionRef.current(selectedText);
           }
         },
       });
 
       editor.focus();
     },
-    [onExecute, onExecuteSelection]
+    // Only depends on initial intellisenseMetadata — refs handle callback updates
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [intellisenseMetadata]
   );
 
   const handleChange = useCallback(
@@ -101,7 +147,7 @@ export function QueryEditor({
   return (
     <Editor
       defaultLanguage="sql"
-      theme="vs-dark"
+      theme={theme}
       value={value}
       onChange={handleChange}
       onMount={handleMount}

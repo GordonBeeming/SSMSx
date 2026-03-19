@@ -1,6 +1,7 @@
 import { useEffect, useCallback, useState } from "react";
 import { useQueryStore } from "../store/queryStore";
 import { QueryEditor } from "./QueryEditor";
+import { QueryToolbar } from "./QueryToolbar";
 import { QueryStatusBar } from "./QueryStatusBar";
 import { QueryResultsTable } from "./QueryResultsTable";
 import {
@@ -11,7 +12,7 @@ import {
 } from "../api/queryApi";
 
 export function QueryPanel() {
-  const { activeTabId, tabs, tabSql, updateSql, executeQuery, results, loadIntelliSense } =
+  const { activeTabId, tabs, tabSql, updateSql, executeQuery, cancelQuery, results, loadIntelliSense } =
     useQueryStore();
 
   const activeTab = tabs.find((t) => t.id === activeTabId);
@@ -101,6 +102,18 @@ export function QueryPanel() {
     [activeTabId, executeQuery]
   );
 
+  // For toolbar "Execute Selection" button (no sql param — triggers via the editor ref)
+  const handleExecuteSelectionFromToolbar = useCallback(() => {
+    // Dispatch a custom event the editor can pick up to execute the current selection
+    window.dispatchEvent(new CustomEvent("query:execute-selection"));
+  }, []);
+
+  const handleCancel = useCallback(() => {
+    if (activeTabId) {
+      cancelQuery(activeTabId);
+    }
+  }, [activeTabId, cancelQuery]);
+
   if (!activeTab || !activeTabId) {
     return null;
   }
@@ -111,6 +124,14 @@ export function QueryPanel() {
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
+      {/* Toolbar */}
+      <QueryToolbar
+        tabId={activeTabId}
+        onExecute={handleExecute}
+        onExecuteSelection={handleExecuteSelectionFromToolbar}
+        onCancel={handleCancel}
+      />
+
       {/* Editor area */}
       <div className={`flex-1 ${hasResults ? "min-h-[120px]" : ""}`}>
         <QueryEditor

@@ -1,7 +1,8 @@
 mod sidecar;
 mod commands;
 
-use tauri::Manager;
+use tauri::{Manager, Emitter};
+use tauri::menu::{MenuBuilder, SubmenuBuilder, MenuItemBuilder, PredefinedMenuItem};
 
 pub fn run() {
     let _ = env_logger::try_init();
@@ -22,6 +23,9 @@ pub fn run() {
 
             app.manage(sidecar_manager);
 
+            // Build application menu
+            build_menu(app)?;
+
             // Auto-open devtools in debug builds
             #[cfg(debug_assertions)]
             {
@@ -31,6 +35,15 @@ pub fn run() {
             }
 
             Ok(())
+        })
+        .on_menu_event(|app, event| {
+            let id = event.id().0.as_str();
+            if let Some(window) = app.get_webview_window("main") {
+                // Emit menu events to the frontend so React can handle them
+                if let Err(e) = window.emit(&format!("menu:{}", id), ()) {
+                    log::error!("Failed to emit menu event '{}': {}", id, e);
+                }
+            }
         })
         .invoke_handler(tauri::generate_handler![
             commands::ping::ping,
@@ -57,4 +70,65 @@ pub fn run() {
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+fn build_menu(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
+    let handle = app.handle();
+
+    // -- File menu --
+    let file_menu = SubmenuBuilder::new(handle, "File")
+        .item(&MenuItemBuilder::with_id("new-connection", "New Connection...")
+            .accelerator("CmdOrCtrl+Shift+N")
+            .build(handle)?)
+        .item(&MenuItemBuilder::with_id("new-query", "New Query")
+            .accelerator("CmdOrCtrl+N")
+            .build(handle)?)
+        .separator()
+        .item(&MenuItemBuilder::with_id("close-tab", "Close Tab")
+            .accelerator("CmdOrCtrl+W")
+            .build(handle)?)
+        .separator()
+        .item(&PredefinedMenuItem::quit(handle, None)?)
+        .build()?;
+
+    // -- Edit menu (standard) --
+    let edit_menu = SubmenuBuilder::new(handle, "Edit")
+        .item(&PredefinedMenuItem::undo(handle, None)?)
+        .item(&PredefinedMenuItem::redo(handle, None)?)
+        .separator()
+        .item(&PredefinedMenuItem::cut(handle, None)?)
+        .item(&PredefinedMenuItem::copy(handle, None)?)
+        .item(&PredefinedMenuItem::paste(handle, None)?)
+        .item(&PredefinedMenuItem::select_all(handle, None)?)
+        .build()?;
+
+    // -- Query menu --
+    let query_menu = SubmenuBuilder::new(handle, "Query")
+        .item(&MenuItemBuilder::with_id("execute-query", "Execute")
+            .accelerator("F5")
+            .build(handle)?)
+        .item(&MenuItemBuilder::with_id("execute-selection", "Execute Selection")
+            .accelerator("CmdOrCtrl+Shift+E")
+            .build(handle)?)
+        .separator()
+        .item(&MenuItemBuilder::with_id("cancel-query", "Cancel Execution")
+            .build(handle)?)
+        .build()?;
+
+    // -- View menu --
+    let view_menu = SubmenuBuilder::new(handle, "View")
+        .item(&MenuItemBuilder::with_id("toggle-explorer", "Object Explorer")
+            .build(handle)?)
+        .build()?;
+
+    let menu = MenuBuilder::new(handle)
+        .item(&file_menu)
+        .item(&edit_menu)
+        .item(&query_menu)
+        .item(&view_menu)
+        .build()?;
+
+    app.set_menu(menu)?;
+
+    Ok(())
 }
