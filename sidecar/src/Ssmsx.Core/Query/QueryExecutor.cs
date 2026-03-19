@@ -1,3 +1,4 @@
+using System.Data.SqlTypes;
 using System.Diagnostics;
 using Microsoft.Data.SqlClient;
 using Ssmsx.Core.Connections;
@@ -302,22 +303,63 @@ public class QueryExecutor
 
     /// <summary>
     /// Converts a SQL value to a JSON-safe representation.
-    /// Binary data is converted to base64, dates to ISO 8601, etc.
+    /// All values are converted to types registered in ProtocolJsonContext:
+    /// null, string, bool, byte, short, int, long, float, double, decimal.
+    ///
+    /// SQL Server type → CLR type from GetValue() → JSON-safe output:
+    ///   bigint          → Int64          → long (kept)
+    ///   int             → Int32          → int (kept)
+    ///   smallint        → Int16          → short (kept)
+    ///   tinyint         → Byte           → byte (kept)
+    ///   bit             → Boolean        → bool (kept)
+    ///   decimal/numeric → Decimal        → decimal (kept)
+    ///   money/smallmoney→ Decimal        → decimal (kept)
+    ///   float           → Double         → double (kept)
+    ///   real            → Single         → float (kept)
+    ///   char/nchar/varchar/nvarchar/text/ntext → String → string (kept)
+    ///   date/datetime/datetime2/smalldatetime  → DateTime → string (ISO 8601)
+    ///   datetimeoffset  → DateTimeOffset → string (ISO 8601)
+    ///   time            → TimeSpan       → string (hh:mm:ss.fffffff)
+    ///   uniqueidentifier→ Guid           → string
+    ///   binary/varbinary/image/rowversion/timestamp → Byte[] → string (base64)
+    ///   xml             → SqlXml         → string (XML content)
+    ///   sql_variant     → Object         → recursive (underlying type)
     /// </summary>
     private static object? ConvertToJsonSafeValue(object value)
     {
         return value switch
         {
+            // Null
             DBNull => null,
+
+            // Numeric types — kept as-is (registered in ProtocolJsonContext)
+            bool b => b,
+            byte b => b,
+            short s => s,
+            int i => i,
+            long l => l,
+            float f => f,
+            double d => d,
+            decimal m => m,
+
+            // String types — kept as-is
+            string s => s,
+
+            // Binary types → base64 string
             byte[] bytes => Convert.ToBase64String(bytes),
+
+            // Date/time types → ISO 8601 string
             DateTime dt => dt.ToString("O"),
             DateTimeOffset dto => dto.ToString("O"),
-            TimeSpan ts => ts.ToString(),
+            TimeSpan ts => ts.ToString("c"), // constant format: hh:mm:ss.fffffff
+
+            // Guid → string
             Guid guid => guid.ToString(),
-            decimal d => d,
-            float f => f,
-            double dbl => dbl,
-            int or long or short or byte or bool => value,
+
+            // SqlXml (from SQL xml type) → XML content string
+            SqlXml xml => xml.IsNull ? null : xml.Value,
+
+            // Fallback for any unexpected type (e.g. SqlTypes wrappers) → string
             _ => value.ToString()
         };
     }
