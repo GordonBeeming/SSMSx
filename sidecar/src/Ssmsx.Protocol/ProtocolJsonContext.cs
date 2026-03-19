@@ -77,6 +77,15 @@ namespace Ssmsx.Protocol;
 [JsonSerializable(typeof(List<List<object?>>))]
 [JsonSerializable(typeof(List<object?>))]
 [JsonSerializable(typeof(List<string>))]
+// Primitive types that can appear in query result rows (needed for polymorphic object? serialization)
+[JsonSerializable(typeof(byte))]
+[JsonSerializable(typeof(short))]
+[JsonSerializable(typeof(int))]
+[JsonSerializable(typeof(long))]
+[JsonSerializable(typeof(float))]
+[JsonSerializable(typeof(double))]
+[JsonSerializable(typeof(decimal))]
+[JsonSerializable(typeof(string))]
 [JsonSourceGenerationOptions(
     PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase,
     DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull)]
