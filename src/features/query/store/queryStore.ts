@@ -177,19 +177,34 @@ export const useQueryStore = create<QueryState>((set, get) => ({
       return;
     }
 
+    // Guard against re-entry: F5/menu/toolbar can all trigger executeQuery,
+    // and restarting mid-run would orphan the in-flight query in the sidecar
+    // (its results would no longer be attributable to the tab).
+    if (state.executionInfo[tabId]?.state === "executing") {
+      console.warn(
+        `Ignoring executeQuery for tab '${tabId}': already executing. Cancel first.`
+      );
+      return;
+    }
+
     const queryText = sql ?? state.tabSql[tabId] ?? "";
     if (!queryText.trim()) {
       return;
     }
 
-    // Set executing state and clear previous results
+    // Generate the requestId client-side and store it BEFORE calling invoke.
+    // This closes the race where streaming events (e.g. the sidecar's
+    // immediate "started" batch) could arrive before the frontend knew
+    // which tab the requestId belonged to.
+    const requestId = crypto.randomUUID();
+
     set((s) => ({
       executionInfo: {
         ...s.executionInfo,
         [tabId]: {
           state: "executing",
           queryId: null,
-          requestId: null,
+          requestId,
           startTime: Date.now(),
         },
       },
@@ -200,22 +215,8 @@ export const useQueryStore = create<QueryState>((set, get) => ({
     }));
 
     try {
-      const response = await queryExecute(
-        tab.connectionId,
-        tab.database,
-        queryText
-      );
-
-      // Store the requestId so we can match streaming events
-      set((s) => ({
-        executionInfo: {
-          ...s.executionInfo,
-          [tabId]: {
-            ...s.executionInfo[tabId],
-            requestId: response.requestId,
-          },
-        },
-      }));
+      await queryExecute(requestId, tab.connectionId, tab.database, queryText);
+      // requestId is already in executionInfo — no follow-up set needed
     } catch (e) {
       console.error(`Query execution failed for tab '${tabId}':`, e);
       set((s) => ({

@@ -56,6 +56,17 @@ export function QueryEditor({
     }
   }, [intellisenseMetadata]);
 
+  // Dispose the Monaco completion provider on unmount.
+  // registerCompletionItemProvider registers globally on the Monaco module, so
+  // if we don't dispose, switching tabs leaks providers and duplicates suggestions.
+  useEffect(() => {
+    return () => {
+      disposableRef.current?.dispose();
+      disposableRef.current = null;
+      completionProviderRef.current = null;
+    };
+  }, []);
+
   // Listen for toolbar "Execute Selection" button
   useEffect(() => {
     const handler = () => {

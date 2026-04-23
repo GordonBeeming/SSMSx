@@ -7,11 +7,13 @@ interface QueryExecuteResponse {
 }
 
 export async function queryExecute(
+  requestId: string,
   connectionId: string,
   database: string,
   sql: string
 ): Promise<QueryExecuteResponse> {
   const result = await invoke<string>("query_execute", {
+    requestId,
     connectionId,
     database,
     sql,

@@ -2,6 +2,9 @@ import { useState, useCallback } from "react";
 import { useQueryStore } from "../store/queryStore";
 import { ContextMenu, type ContextMenuItem } from "../../../shared/components/ContextMenu";
 
+const isMac = navigator.platform.toUpperCase().includes("MAC");
+const NEW_QUERY_SHORTCUT = isMac ? "⌘+N" : "Ctrl+N";
+
 export function QueryTabBar() {
   const { tabs, activeTabId, setActiveTab, removeTab, closeOtherTabs, closeAllTabs } =
     useQueryStore();
@@ -99,7 +102,7 @@ export function QueryTabBar() {
             // Dispatch a custom event that the app can handle for new tab creation
             window.dispatchEvent(new CustomEvent("query:new-tab"));
           }}
-          title="New Query (Ctrl+N)"
+          title={`New Query (${NEW_QUERY_SHORTCUT})`}
         >
           +
         </button>

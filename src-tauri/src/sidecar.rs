@@ -216,16 +216,20 @@ impl SidecarManager {
         }
     }
 
-    /// Send a streaming request to the sidecar. Unlike `send_request`, this returns an
-    /// unbounded receiver that yields multiple response batches until the sidecar sends
-    /// a response with `done: true`. The caller is responsible for consuming the receiver.
-    /// Returns the request ID (for tracking/cancellation) and the receiver.
-    pub async fn send_streaming_request(
+    /// Send a streaming request to the sidecar using a caller-provided request ID.
+    /// Unlike `send_request`, this returns an unbounded receiver that yields multiple
+    /// response batches until the sidecar sends a response with `done: true`. The
+    /// caller is responsible for consuming the receiver.
+    ///
+    /// The caller provides the request ID so it can be stored in frontend state
+    /// before this call resolves, closing the race where the first streaming batch
+    /// could otherwise arrive before the frontend knows what to correlate it with.
+    pub async fn send_streaming_request_with_id(
         &self,
         method: &str,
         params: Option<Value>,
+        id: String,
     ) -> Result<(String, mpsc::UnboundedReceiver<Result<Value, String>>), String> {
-        let id = uuid::Uuid::new_v4().to_string();
 
         let request = serde_json::json!({
             "id": id,

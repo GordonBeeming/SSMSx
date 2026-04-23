@@ -5,6 +5,7 @@ use tauri::Emitter;
 pub async fn query_execute(
     sidecar: tauri::State<'_, SidecarManager>,
     app_handle: tauri::AppHandle,
+    request_id: String,
     connection_id: String,
     database: String,
     sql: String,
@@ -15,8 +16,11 @@ pub async fn query_execute(
         "sql": sql
     });
 
+    // Use the caller-provided request_id so the frontend can store it in
+    // state BEFORE invoke returns — otherwise streaming events can arrive
+    // before the frontend knows which tab they belong to.
     let (request_id, mut rx) = sidecar
-        .send_streaming_request("query.execute", Some(params))
+        .send_streaming_request_with_id("query.execute", Some(params), request_id)
         .await?;
 
     log::debug!(
