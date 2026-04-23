@@ -100,8 +100,18 @@ export class SqlCompletionProvider
     _context: languages.CompletionContext,
     _token: CancellationToken
   ): languages.ProviderResult<languages.CompletionList> {
+    // Read line-level text for immediate context (what keyword preceded the cursor)
     const textUntilPosition = model.getValueInRange({
       startLineNumber: position.lineNumber,
+      startColumn: 1,
+      endLineNumber: position.lineNumber,
+      endColumn: position.column,
+    });
+
+    // Read the full statement (up to cursor) so we can scope columns to
+    // tables actually referenced in this query's FROM/JOIN/UPDATE/INTO clauses.
+    const fullTextUntilCursor = model.getValueInRange({
+      startLineNumber: 1,
       startColumn: 1,
       endLineNumber: position.lineNumber,
       endColumn: position.column,
@@ -150,10 +160,12 @@ export class SqlCompletionProvider
         }
 
         // Check if prefix is a table name → suggest columns for that table
+        // (already scoped to one table, but dedupe defensively in case the
+        // same column name appears across its history/versioned copies)
         const tableColumns = this.metadata.columns.filter(
           (c) => c.tableName.toLowerCase() === prefix.toLowerCase()
         );
-        for (const col of tableColumns) {
+        for (const col of dedupeColumns(tableColumns)) {
           suggestions.push({
             label: col.name,
             kind: 4, // Field
@@ -167,7 +179,9 @@ export class SqlCompletionProvider
       return { suggestions };
     }
 
-    // Table context: suggest tables and views
+    // Table context: suggest tables and views (schema-qualified only — the
+    // unqualified variant just doubled every entry in the popup without
+    // adding real value).
     if (isTableContext && this.metadata) {
       for (const t of this.metadata.tables) {
         suggestions.push({
@@ -177,25 +191,27 @@ export class SqlCompletionProvider
           insertText: `[${t.schema}].[${t.name}]`,
           range,
         });
-        // Also suggest without schema for convenience
-        suggestions.push({
-          label: t.name,
-          kind: t.type === "view" ? 1 : 2,
-          detail: `${t.schema} · ${t.type}`,
-          insertText: t.name,
-          range,
-          sortText: `1_${t.name}`,
-        });
       }
     }
 
-    // Column context: suggest all columns
+    // Column context: suggest columns ONLY from tables referenced in
+    // this query's FROM/JOIN/UPDATE/INTO clauses. If the parser can't
+    // find any referenced tables (e.g. cursor is before FROM), we fall
+    // back to showing all columns deduped by name.
     if (isColumnContext && this.metadata) {
-      for (const col of this.metadata.columns) {
+      const referencedTables = extractReferencedTables(fullTextUntilCursor);
+      const scopedColumns =
+        referencedTables.size > 0
+          ? this.metadata.columns.filter((c) =>
+              referencedTables.has(c.tableName.toLowerCase())
+            )
+          : this.metadata.columns;
+
+      for (const col of dedupeColumns(scopedColumns)) {
         suggestions.push({
           label: col.name,
           kind: 4, // Field
-          detail: `${col.dataType} — ${col.tableName}`,
+          detail: col.detail,
           insertText: col.name,
           range,
           sortText: `0_${col.name}`,
@@ -257,4 +273,136 @@ export class SqlCompletionProvider
 
     return { suggestions };
   }
+}
+
+/**
+ * Parse SQL text and return the set of table names referenced in
+ * FROM, JOIN, UPDATE, and INTO clauses. Table names are returned lowercased.
+ *
+ * Handles:
+ *   - FROM [schema].[table]           → table
+ *   - FROM schema.table               → table
+ *   - FROM [table]                    → table
+ *   - FROM table                      → table
+ *   - FROM [db].[schema].[table]      → table
+ *   - Multiple tables separated by commas
+ *   - JOIN (all variants: INNER, LEFT, RIGHT, CROSS, FULL, OUTER)
+ *
+ * This is intentionally a regex, not a real parser — it's good enough for
+ * scoping completion suggestions, not SQL validation.
+ */
+function extractReferencedTables(sql: string): Set<string> {
+  const tables = new Set<string>();
+
+  // Strip line comments and block comments so we don't match keywords inside them
+  const clean = sql
+    .replace(/--[^\n]*/g, " ")
+    .replace(/\/\*[\s\S]*?\*\//g, " ");
+
+  // Match: (FROM | JOIN | UPDATE | INTO) followed by one or more table refs.
+  // A table ref can be [bracketed] or bare, optionally prefixed with
+  // schema/database qualifiers. Capture everything until we hit whitespace,
+  // a comma, an open paren, or another keyword.
+  const keywordPattern =
+    /\b(?:FROM|JOIN|UPDATE|INTO)\s+([\s\S]*?)(?=\b(?:WHERE|GROUP|ORDER|HAVING|ON|SET|VALUES|SELECT|UNION|EXCEPT|INTERSECT|WITH|OPTION|FOR|GO|;)\b|$)/gi;
+
+  let match: RegExpExecArray | null;
+  while ((match = keywordPattern.exec(clean)) !== null) {
+    const clause = match[1];
+    // Within a FROM/JOIN clause, tables may be comma-separated. Split on commas
+    // at the top level (ignoring brackets).
+    for (const ref of splitTableRefs(clause)) {
+      const tableName = extractTableName(ref);
+      if (tableName) {
+        tables.add(tableName.toLowerCase());
+      }
+    }
+  }
+
+  return tables;
+}
+
+/** Split a FROM/JOIN clause body on top-level commas. */
+function splitTableRefs(clause: string): string[] {
+  const parts: string[] = [];
+  let depth = 0;
+  let current = "";
+  for (const ch of clause) {
+    if (ch === "[" || ch === "(") depth++;
+    else if (ch === "]" || ch === ")") depth--;
+    else if (ch === "," && depth === 0) {
+      parts.push(current);
+      current = "";
+      continue;
+    }
+    current += ch;
+  }
+  if (current.trim()) parts.push(current);
+  return parts;
+}
+
+/**
+ * Extract just the table name from a reference like:
+ *   "[WideWorldImporters].[Application].[Cities] c"  → "Cities"
+ *   "dbo.Orders AS o"                                → "Orders"
+ *   "Customers"                                      → "Customers"
+ * Returns null if the reference is a subquery or otherwise can't be parsed.
+ */
+function extractTableName(ref: string): string | null {
+  const trimmed = ref.trim();
+  if (!trimmed || trimmed.startsWith("(")) return null;
+
+  // Take the first token (before any whitespace — skips aliases, AS keyword, etc.)
+  const firstToken = trimmed.split(/\s+/)[0];
+
+  // Split on dots to handle [db].[schema].[table] or schema.table
+  // Strip brackets from each part.
+  const parts = firstToken
+    .split(".")
+    .map((p) => p.replace(/^\[|\]$/g, ""))
+    .filter((p) => p.length > 0);
+
+  if (parts.length === 0) return null;
+  return parts[parts.length - 1];
+}
+
+interface DedupedColumn {
+  name: string;
+  detail: string;
+  tableName: string;
+  dataType: string;
+}
+
+/**
+ * Collapse columns that share a name (e.g. `CityName` exists in `Cities`,
+ * `Cities_Archive`, views, etc.) into a single completion entry. The detail
+ * string surfaces the first table and, when relevant, how many others also
+ * have the column so the popup isn't flooded with near-identical rows.
+ */
+function dedupeColumns(
+  columns: Array<{ name: string; tableName: string; dataType: string }>
+): DedupedColumn[] {
+  const byName = new Map<string, { dataType: string; tables: string[] }>();
+  for (const col of columns) {
+    const existing = byName.get(col.name);
+    if (existing) {
+      if (!existing.tables.includes(col.tableName)) {
+        existing.tables.push(col.tableName);
+      }
+    } else {
+      byName.set(col.name, { dataType: col.dataType, tables: [col.tableName] });
+    }
+  }
+
+  const result: DedupedColumn[] = [];
+  for (const [name, info] of byName) {
+    const first = info.tables[0];
+    const extra = info.tables.length - 1;
+    const detail =
+      extra > 0
+        ? `${info.dataType} — ${first} (+${extra} more)`
+        : `${info.dataType} — ${first}`;
+    result.push({ name, detail, tableName: first, dataType: info.dataType });
+  }
+  return result;
 }

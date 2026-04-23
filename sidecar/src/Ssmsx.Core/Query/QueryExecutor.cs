@@ -283,6 +283,8 @@ public class QueryExecutor
 
     /// <summary>
     /// Reads a single row from the SqlDataReader, converting values to JSON-safe types.
+    /// UDT columns (geography, geometry, hierarchyid) are read as raw bytes to avoid
+    /// loading Microsoft.SqlServer.Types which we don't ship.
     /// </summary>
     private static List<object?> ReadRow(SqlDataReader reader)
     {
@@ -295,10 +297,65 @@ public class QueryExecutor
                 continue;
             }
 
-            var value = reader.GetValue(i);
-            row.Add(ConvertToJsonSafeValue(value));
+            // Check for UDT types that need Microsoft.SqlServer.Types assembly
+            // and read them as raw bytes instead of trying to instantiate the CLR type.
+            var typeName = reader.GetDataTypeName(i);
+            if (IsUnsupportedUdt(typeName))
+            {
+                row.Add(ReadUdtAsBytes(reader, i));
+                continue;
+            }
+
+            try
+            {
+                var value = reader.GetValue(i);
+                row.Add(ConvertToJsonSafeValue(value));
+            }
+            catch (Exception ex) when (IsAssemblyLoadError(ex))
+            {
+                // Fallback: the CLR type wasn't recognized ahead of time but needs an
+                // assembly we don't have. Read as bytes instead.
+                row.Add(ReadUdtAsBytes(reader, i));
+            }
         }
         return row;
+    }
+
+    private static bool IsUnsupportedUdt(string dataTypeName)
+    {
+        // Match fully-qualified names like "sys.geography" or short "geography"
+        var name = dataTypeName.Split('.').Last().ToLowerInvariant();
+        return name is "geography" or "geometry" or "hierarchyid";
+    }
+
+    private static bool IsAssemblyLoadError(Exception ex)
+    {
+        // Walks inner exceptions looking for FileNotFoundException on SqlServer.Types,
+        // which is what gets thrown when GetValue() tries to instantiate a spatial type
+        // without the assembly available.
+        for (var e = ex; e != null; e = e.InnerException)
+        {
+            if (e is System.IO.FileNotFoundException || e is System.IO.FileLoadException)
+                return true;
+            if (e.Message.Contains("Microsoft.SqlServer.Types", StringComparison.Ordinal))
+                return true;
+        }
+        return false;
+    }
+
+    private static object? ReadUdtAsBytes(SqlDataReader reader, int i)
+    {
+        try
+        {
+            var sqlBytes = reader.GetSqlBytes(i);
+            if (sqlBytes.IsNull)
+                return null;
+            return "0x" + Convert.ToHexString(sqlBytes.Value);
+        }
+        catch (Exception ex)
+        {
+            return $"<unreadable UDT: {ex.Message}>";
+        }
     }
 
     /// <summary>

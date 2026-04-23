@@ -4,12 +4,7 @@ import { QueryEditor } from "./QueryEditor";
 import { QueryToolbar } from "./QueryToolbar";
 import { QueryStatusBar } from "./QueryStatusBar";
 import { QueryResultsTable } from "./QueryResultsTable";
-import {
-  onQueryResults,
-  onQueryComplete,
-  onQueryError,
-  type IntelliSenseMetadata,
-} from "../api/queryApi";
+import type { IntelliSenseMetadata } from "../api/queryApi";
 
 export function QueryPanel() {
   const { activeTabId, tabs, tabSql, updateSql, executeQuery, cancelQuery, results, loadIntelliSense } =
@@ -43,44 +38,9 @@ export function QueryPanel() {
     };
   }, [activeTab?.connectionId, activeTab?.database, loadIntelliSense]);
 
-  // Subscribe to Tauri events for streaming results.
-  // Uses a cancelled flag to prevent double-registration in React strict mode
-  // (where the async setup can complete after the cleanup has already run).
-  useEffect(() => {
-    let cancelled = false;
-    const unlisteners: Array<() => void> = [];
-
-    const setup = async () => {
-      const unlisten1 = await onQueryResults((payload) => {
-        if (!cancelled) useQueryStore.getState().handleResultsBatch(payload);
-      });
-      if (cancelled) { unlisten1(); return; }
-      unlisteners.push(unlisten1);
-
-      const unlisten2 = await onQueryComplete((payload) => {
-        if (!cancelled) useQueryStore.getState().handleQueryComplete(payload);
-      });
-      if (cancelled) { unlisten2(); return; }
-      unlisteners.push(unlisten2);
-
-      const unlisten3 = await onQueryError((payload) => {
-        if (!cancelled) useQueryStore.getState().handleQueryError(payload.queryId, payload.requestId, payload.error);
-      });
-      if (cancelled) { unlisten3(); return; }
-      unlisteners.push(unlisten3);
-    };
-
-    setup().catch((e) =>
-      console.error("Failed to set up query event listeners:", e)
-    );
-
-    return () => {
-      cancelled = true;
-      for (const unlisten of unlisteners) {
-        unlisten();
-      }
-    };
-  }, []);
+  // Note: Tauri event listeners are registered once at app startup in main.tsx
+  // (via initQueryEventListeners) — not here — to avoid React strict mode
+  // breaking Tauri's internal listener registry.
 
   const handleChange = useCallback(
     (value: string) => {
