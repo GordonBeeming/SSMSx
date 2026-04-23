@@ -1,6 +1,14 @@
+import { useEffect, useCallback } from "react";
+import { listen } from "@tauri-apps/api/event";
 import { useConnectionStore, ConnectionDialog } from "../features/connection";
-import { useQueryStore } from "../features/query";
+import { useQueryStore, QueryPanel, QueryTabBar } from "../features/query";
 import { ObjectExplorerTree } from "../features/explorer";
+
+let tabCounter = 0;
+
+function isMac(): boolean {
+  return navigator.platform.toUpperCase().includes("MAC");
+}
 
 function App() {
   const {
@@ -15,8 +23,117 @@ function App() {
   );
   const hasConnections = activeConnections.length > 0;
 
-  const { tabs, activeTabId } = useQueryStore();
+  const { tabs, activeTabId, addTab } = useQueryStore();
   const activeTab = tabs.find((t) => t.id === activeTabId);
+
+  const createNewTab = useCallback(() => {
+    // Use the first active connection as default
+    const defaultConn = activeConnections[0];
+    if (!defaultConn) return;
+
+    tabCounter++;
+    addTab({
+      id: crypto.randomUUID(),
+      connectionId: defaultConn.id,
+      database: defaultConn.database ?? "master",
+      title: `Query ${tabCounter}`,
+      connectionColor: defaultConn.color,
+    });
+  }, [activeConnections, addTab]);
+
+  // Listen for new tab events from the tab bar's "+" button
+  useEffect(() => {
+    const handler = () => createNewTab();
+    window.addEventListener("query:new-tab", handler);
+    return () => window.removeEventListener("query:new-tab", handler);
+  }, [createNewTab]);
+
+  // Listen for native menu events from Tauri
+  useEffect(() => {
+    const unlisteners: Array<() => void> = [];
+
+    const setup = async () => {
+      // File > New Query
+      unlisteners.push(
+        await listen("menu:new-query", () => {
+          createNewTab();
+        })
+      );
+
+      // File > New Connection
+      unlisteners.push(
+        await listen("menu:new-connection", () => {
+          openDialog();
+        })
+      );
+
+      // File > Close Tab
+      unlisteners.push(
+        await listen("menu:close-tab", () => {
+          const store = useQueryStore.getState();
+          if (store.activeTabId) {
+            store.removeTab(store.activeTabId);
+          }
+        })
+      );
+
+      // Query > Execute
+      unlisteners.push(
+        await listen("menu:execute-query", () => {
+          const store = useQueryStore.getState();
+          if (store.activeTabId) {
+            store.executeQuery(store.activeTabId);
+          }
+        })
+      );
+
+      // Query > Execute Selection
+      unlisteners.push(
+        await listen("menu:execute-selection", () => {
+          window.dispatchEvent(new CustomEvent("query:execute-selection"));
+        })
+      );
+
+      // Query > Cancel
+      unlisteners.push(
+        await listen("menu:cancel-query", () => {
+          const store = useQueryStore.getState();
+          if (store.activeTabId) {
+            store.cancelQuery(store.activeTabId);
+          }
+        })
+      );
+    };
+
+    setup().catch((e) =>
+      console.error("Failed to set up menu event listeners:", e)
+    );
+
+    return () => {
+      for (const unlisten of unlisteners) {
+        unlisten();
+      }
+    };
+  }, [createNewTab, openDialog]);
+
+  // Global keyboard shortcuts (F5 for execute when editor is not focused)
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      // F5 — Execute query (global fallback when editor doesn't have focus)
+      if (e.key === "F5") {
+        e.preventDefault();
+        const store = useQueryStore.getState();
+        if (store.activeTabId) {
+          store.executeQuery(store.activeTabId);
+        }
+      }
+    };
+
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, []);
+
+  const shortcutKey = isMac() ? "⌘" : "Ctrl";
 
   return (
     <div className="flex h-screen flex-col">
@@ -69,60 +186,33 @@ function App() {
         {/* Content area */}
         <div className="flex flex-1 flex-col overflow-hidden">
           {/* Query tabs bar */}
-          {tabs.length > 0 && (
-            <div className="flex border-b border-bg-tertiary bg-bg-secondary">
-              {tabs.map((tab) => (
-                <div
-                  key={tab.id}
-                  className={`flex items-center gap-1 border-r border-bg-tertiary px-3 py-1.5 text-xs ${
-                    tab.id === activeTabId
-                      ? "bg-bg-primary text-text-primary"
-                      : "text-text-secondary hover:bg-bg-tertiary"
-                  }`}
-                >
-                  <button
-                    className="truncate"
-                    onClick={() => useQueryStore.getState().setActiveTab(tab.id)}
-                  >
-                    {tab.title}
-                  </button>
-                  <button
-                    className="ml-1 text-text-secondary hover:text-text-primary"
-                    onClick={() => useQueryStore.getState().removeTab(tab.id)}
-                  >
-                    x
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
+          {tabs.length > 0 && <QueryTabBar />}
 
           {/* Tab content */}
-          <div className="flex flex-1 items-center justify-center overflow-auto">
-            {activeTab ? (
-              <div className="h-full w-full p-4">
-                <pre className="h-full w-full overflow-auto rounded border border-bg-tertiary bg-bg-primary p-3 text-sm text-text-primary">
-                  {activeTab.initialSql}
-                </pre>
-              </div>
-            ) : !hasConnections ? (
-              <div className="text-center">
-                <p className="text-lg text-text-secondary">
-                  Connect to a SQL Server to get started
+          {activeTab ? (
+            <QueryPanel />
+          ) : (
+            <div className="flex flex-1 items-center justify-center overflow-auto">
+              {!hasConnections ? (
+                <div className="text-center">
+                  <p className="text-lg text-text-secondary">
+                    Connect to a SQL Server to get started
+                  </p>
+                  <button
+                    onClick={openDialog}
+                    className="mt-4 rounded bg-accent px-6 py-2 text-accent-text hover:bg-accent-hover"
+                  >
+                    New Connection
+                  </button>
+                </div>
+              ) : (
+                <p className="text-sm text-text-secondary">
+                  Browse objects in the explorer, or press {shortcutKey}+N for a
+                  new query.
                 </p>
-                <button
-                  onClick={openDialog}
-                  className="mt-4 rounded bg-accent px-6 py-2 text-accent-text hover:bg-accent-hover"
-                >
-                  New Connection
-                </button>
-              </div>
-            ) : (
-              <p className="text-sm text-text-secondary">
-                Browse objects in the explorer or right-click to script.
-              </p>
-            )}
-          </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
 

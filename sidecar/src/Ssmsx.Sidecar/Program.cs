@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Text.Json;
 using Ssmsx.Protocol;
 using Ssmsx.Protocol.Messages;
@@ -6,6 +7,7 @@ using Ssmsx.Core.Storage;
 using Ssmsx.Core.Connections;
 using Ssmsx.Core.Credentials;
 using Ssmsx.Core.Explorer;
+using Ssmsx.Core.Query;
 
 // Disable stdout buffering for real-time communication
 Console.OutputEncoding = System.Text.Encoding.UTF8;
@@ -15,6 +17,35 @@ var connectionStore = new ConnectionStore();
 var credentialStore = CredentialStoreFactory.Create();
 var connectionManager = new ConnectionManager();
 var schemaDiscovery = new SchemaDiscoveryService(connectionManager);
+var queryCancellationManager = new QueryCancellationManager();
+var queryExecutor = new QueryExecutor(connectionManager, queryCancellationManager);
+var intelliSenseService = new IntelliSenseService(connectionManager);
+
+await using var stdout = Console.OpenStandardOutput();
+using var writer = new StreamWriter(stdout) { AutoFlush = true };
+
+// All stdout writes MUST go through this to prevent interleaving
+var writerLock = new object();
+void WriteResponse(string json)
+{
+    lock (writerLock) { writer.WriteLine(json); }
+}
+
+void SendResult(string requestId, JsonElement result)
+{
+    var response = new JsonRpcResponse { Id = requestId, Result = result };
+    WriteResponse(JsonSerializer.Serialize(response, ProtocolJsonContext.Default.JsonRpcResponse));
+}
+
+void SendError(string requestId, string code, string message)
+{
+    var response = new JsonRpcResponse
+    {
+        Id = requestId,
+        Error = new JsonRpcError { Code = code, Message = message }
+    };
+    WriteResponse(JsonSerializer.Serialize(response, ProtocolJsonContext.Default.JsonRpcResponse));
+}
 
 var handlers = new Dictionary<string, Func<JsonElement?, Task<JsonElement>>>
 {
@@ -40,46 +71,31 @@ var handlers = new Dictionary<string, Func<JsonElement?, Task<JsonElement>>>
     ["connection.save"] = async p =>
     {
         var args = Deserialize<ConnectionSaveParams>(p, ProtocolJsonContext.Default.ConnectionSaveParams);
-        // Store password in keychain if provided
         ConnectionInfo saved;
         if (!string.IsNullOrEmpty(args.Password))
         {
             var credKey = $"ssmsx/{args.Connection.Id}";
             await credentialStore.StoreAsync(credKey, args.Password);
-            // Save connection with credential reference
             saved = args.Connection with { CredentialRef = credKey };
             await connectionStore.SaveAsync(saved);
         }
         else if (args.ClearCredential)
         {
-            // Explicitly clear stored credential
             var existing = await connectionStore.GetAsync(args.Connection.Id);
             if (existing?.CredentialRef != null)
             {
-                try
-                {
-                    await credentialStore.DeleteAsync(existing.CredentialRef);
-                }
-                catch (Exception ex)
-                {
-                    await Console.Error.WriteLineAsync($"Warning: Failed to delete credential '{existing.CredentialRef}' for connection '{args.Connection.Id}': {ex.Message}");
-                }
+                try { await credentialStore.DeleteAsync(existing.CredentialRef); }
+                catch (Exception ex) { await Console.Error.WriteLineAsync($"Warning: Failed to delete credential '{existing.CredentialRef}': {ex.Message}"); }
             }
             saved = args.Connection with { CredentialRef = null };
             await connectionStore.SaveAsync(saved);
         }
         else
         {
-            // No new password and no clear request — preserve existing credential
             var existing = await connectionStore.GetAsync(args.Connection.Id);
-            if (existing?.CredentialRef != null)
-            {
-                saved = args.Connection with { CredentialRef = existing.CredentialRef };
-            }
-            else
-            {
-                saved = args.Connection;
-            }
+            saved = existing?.CredentialRef != null
+                ? args.Connection with { CredentialRef = existing.CredentialRef }
+                : args.Connection;
             await connectionStore.SaveAsync(saved);
         }
         return JsonSerializer.SerializeToElement(saved, ProtocolJsonContext.Default.ConnectionInfo);
@@ -88,15 +104,8 @@ var handlers = new Dictionary<string, Func<JsonElement?, Task<JsonElement>>>
     ["connection.delete"] = async p =>
     {
         var args = Deserialize<ConnectionDeleteParams>(p, ProtocolJsonContext.Default.ConnectionDeleteParams);
-        // Try to delete credential from keychain
-        try
-        {
-            await credentialStore.DeleteAsync($"ssmsx/{args.Id}");
-        }
-        catch (Exception ex)
-        {
-            await Console.Error.WriteLineAsync($"Warning: Failed to delete credential for connection '{args.Id}': {ex.Message}");
-        }
+        try { await credentialStore.DeleteAsync($"ssmsx/{args.Id}"); }
+        catch (Exception ex) { await Console.Error.WriteLineAsync($"Warning: Failed to delete credential for connection '{args.Id}': {ex.Message}"); }
         var deleted = await connectionStore.DeleteAsync(args.Id);
         return JsonSerializer.SerializeToElement(
             new ConnectionDeleteResult { Deleted = deleted },
@@ -137,7 +146,6 @@ var handlers = new Dictionary<string, Func<JsonElement?, Task<JsonElement>>>
         return JsonSerializer.SerializeToElement(true, ProtocolJsonContext.Default.Boolean);
     },
 
-    // Explorer methods
     ["explorer.databases"] = async p =>
     {
         var args = Deserialize<ExplorerDatabasesParams>(p, ProtocolJsonContext.Default.ExplorerDatabasesParams);
@@ -206,70 +214,155 @@ var handlers = new Dictionary<string, Func<JsonElement?, Task<JsonElement>>>
         var args = Deserialize<ExplorerObjectDefinitionParams>(p, ProtocolJsonContext.Default.ExplorerObjectDefinitionParams);
         var result = await schemaDiscovery.GetObjectDefinitionAsync(args.ConnectionId, args.Database, args.Schema, args.ObjectName, args.ObjectType);
         return JsonSerializer.SerializeToElement(result, ProtocolJsonContext.Default.ObjectScriptResult);
-    }
+    },
+
+    ["intellisense.getMetadata"] = async p =>
+    {
+        var args = Deserialize<IntelliSenseGetMetadataParams>(p, ProtocolJsonContext.Default.IntelliSenseGetMetadataParams);
+        var result = await intelliSenseService.GetMetadataAsync(args.ConnectionId, args.Database);
+        return JsonSerializer.SerializeToElement(result, ProtocolJsonContext.Default.IntelliSenseMetadata);
+    },
+
+    // Note: query.cancel is handled directly on the stdin reader thread
+    // (not here) so it works even while a query blocks the main loop.
 };
 
-await using var stdout = Console.OpenStandardOutput();
-using var writer = new StreamWriter(stdout) { AutoFlush = true };
+// --- Request processing ---
+// We use a concurrent queue + semaphore so a background stdin reader can enqueue
+// requests while the main processing loop handles them one at a time.
+// This allows query.cancel to be queued and processed between query batches,
+// since async awaits yield control to process the next queued request.
+var requestQueue = new BlockingCollection<string>();
 
-string? line;
-while ((line = Console.ReadLine()) is not null)
+// Background stdin reader — reads lines and enqueues them.
+// Cancel requests are handled inline on this thread (SqlCommand.Cancel is thread-safe)
+// so they work even while a query is blocking the main processing loop.
+var stdinReader = new Thread(() =>
 {
-    if (string.IsNullOrWhiteSpace(line))
-        continue;
+    string? inputLine;
+    while ((inputLine = Console.ReadLine()) is not null)
+    {
+        if (string.IsNullOrWhiteSpace(inputLine))
+            continue;
 
-    JsonRpcResponse response;
+        // Fast-path: handle query.cancel directly on the reader thread
+        // so it works even while the main loop is blocked on a streaming query
+        try
+        {
+            var peek = JsonSerializer.Deserialize(inputLine, ProtocolJsonContext.Default.JsonRpcRequest);
+            if (peek is not null && peek.Method == "query.cancel")
+            {
+                try
+                {
+                    var cancelArgs = Deserialize<QueryCancelParams>(peek.Params, ProtocolJsonContext.Default.QueryCancelParams);
+                    var cancelled = queryCancellationManager.Cancel(cancelArgs.QueryId);
+                    var cancelResult = JsonSerializer.SerializeToElement(
+                        new QueryCancelResult { Cancelled = cancelled },
+                        ProtocolJsonContext.Default.QueryCancelResult);
+                    SendResult(peek.Id, cancelResult);
+                }
+                catch (Exception ex)
+                {
+                    SendError(peek.Id, "CANCEL_ERROR", ex.Message);
+                }
+                continue; // Don't enqueue — already handled
+            }
+        }
+        catch
+        {
+            // If parsing fails, let the main loop handle the error
+        }
+
+        requestQueue.Add(inputLine);
+    }
+    requestQueue.CompleteAdding();
+})
+{
+    IsBackground = true,
+    Name = "StdinReader"
+};
+stdinReader.Start();
+
+// Main processing loop — processes requests from the queue
+foreach (var requestLine in requestQueue.GetConsumingEnumerable())
+{
     string requestId = "unknown";
     try
     {
-        var request = JsonSerializer.Deserialize(line, ProtocolJsonContext.Default.JsonRpcRequest);
+        var request = JsonSerializer.Deserialize(requestLine, ProtocolJsonContext.Default.JsonRpcRequest);
         if (request is null)
         {
-            response = new JsonRpcResponse
-            {
-                Id = "unknown",
-                Error = new JsonRpcError { Code = "INVALID_REQUEST", Message = "Deserialized request was null" }
-            };
-            var nullJson = JsonSerializer.Serialize(response, ProtocolJsonContext.Default.JsonRpcResponse);
-            await writer.WriteLineAsync(nullJson);
+            SendError("unknown", "INVALID_REQUEST", "Deserialized request was null");
             continue;
         }
 
         requestId = request.Id;
 
+        // query.execute streams multiple responses, then completes
+        if (request.Method == "query.execute")
+        {
+            await HandleQueryExecute(request.Id, request.Params);
+            continue;
+        }
+
         if (handlers.TryGetValue(request.Method, out var handler))
         {
             var result = await handler(request.Params);
-            response = new JsonRpcResponse { Id = request.Id, Result = result };
+            SendResult(request.Id, result);
         }
         else
         {
-            response = new JsonRpcResponse
-            {
-                Id = request.Id,
-                Error = new JsonRpcError { Code = "METHOD_NOT_FOUND", Message = $"Unknown method: {request.Method}" }
-            };
+            SendError(request.Id, "METHOD_NOT_FOUND", $"Unknown method: {request.Method}");
         }
     }
     catch (JsonException ex)
     {
-        response = new JsonRpcResponse
-        {
-            Id = "unknown",
-            Error = new JsonRpcError { Code = "PARSE_ERROR", Message = ex.Message }
-        };
+        SendError("unknown", "PARSE_ERROR", ex.Message);
     }
     catch (Exception ex)
     {
-        response = new JsonRpcResponse
+        SendError(requestId, "INTERNAL_ERROR", ex.Message);
+    }
+}
+
+// --- query.execute handler ---
+async Task HandleQueryExecute(string requestId, JsonElement? p)
+{
+    var args = Deserialize<QueryExecuteParams>(p, ProtocolJsonContext.Default.QueryExecuteParams);
+    var queryId = Guid.NewGuid().ToString();
+    using var cts = new CancellationTokenSource();
+    queryCancellationManager.Register(queryId, cts);
+
+    // Send immediate "started" response so frontend knows the queryId for cancellation
+    {
+        var startBatch = new QueryExecuteResult
         {
-            Id = requestId,
-            Error = new JsonRpcError { Code = "INTERNAL_ERROR", Message = ex.Message }
+            QueryId = queryId,
+            Batch = 0,
+            Done = false
         };
+        SendResult(requestId, JsonSerializer.SerializeToElement(startBatch, ProtocolJsonContext.Default.QueryExecuteResult));
     }
 
-    var json = JsonSerializer.Serialize(response, ProtocolJsonContext.Default.JsonRpcResponse);
-    await writer.WriteLineAsync(json);
+    try
+    {
+        await queryExecutor.ExecuteAsync(
+            args.ConnectionId,
+            args.Database,
+            args.Sql,
+            queryId,
+            batch =>
+            {
+                SendResult(requestId, JsonSerializer.SerializeToElement(batch, ProtocolJsonContext.Default.QueryExecuteResult));
+                return Task.CompletedTask;
+            },
+            cts.Token);
+    }
+    catch (Exception ex)
+    {
+        await Console.Error.WriteLineAsync($"Error executing query '{queryId}': {ex.Message}");
+        SendError(requestId, "QUERY_ERROR", ex.Message);
+    }
 }
 
 // Helper to deserialize params with proper error handling
