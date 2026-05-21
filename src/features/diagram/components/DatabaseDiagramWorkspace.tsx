@@ -385,6 +385,48 @@ function getInitialFocusNodeIds(diagram: DatabaseDiagramInfo): string[] {
   return [focusNode[0], ...related];
 }
 
+function getInitialDiagramView(
+  diagramViewId: string | undefined,
+  storedViews: SavedDiagramView[],
+  loadedDiagram: DatabaseDiagramInfo,
+  initialName: string | undefined
+): { view: SavedDiagramView; isNewRequestedView: boolean } {
+  const requestedView = diagramViewId
+    ? storedViews.find((view) => view.id === diagramViewId)
+    : null;
+  if (requestedView) {
+    return { view: requestedView, isNewRequestedView: false };
+  }
+
+  if (diagramViewId) {
+    const emptyView = createEmptyDiagramView(storedViews, diagramViewId);
+    return {
+      view: {
+        ...emptyView,
+        name: initialName || emptyView.name,
+      },
+      isNewRequestedView: true,
+    };
+  }
+
+  const existingView = storedViews[0];
+  if (existingView) {
+    return { view: existingView, isNewRequestedView: false };
+  }
+
+  return {
+    view: {
+      id: crypto.randomUUID(),
+      name: initialName || "Diagram 1",
+      selectedTableKeys: getInitialFocusNodeIds(loadedDiagram),
+      layoutMode: "lr",
+      manualPositions: {},
+      tableListCollapsed: false,
+    },
+    isNewRequestedView: false,
+  };
+}
+
 export function DatabaseDiagramWorkspace({
   connectionId,
   database,
@@ -419,26 +461,12 @@ export function DatabaseDiagramWorkspace({
     try {
       const loaded = await explorerDatabaseDiagram(connectionId, database);
       const storedViews = loadSavedDiagramViews(connectionId, database);
-      const requestedView = diagramViewId
-        ? storedViews.find((view) => view.id === diagramViewId)
-        : null;
-      const initialView =
-        requestedView ??
-        (diagramViewId ? (() => {
-          const emptyView = createEmptyDiagramView(storedViews, diagramViewId);
-          return {
-            ...emptyView,
-            name: initialName || emptyView.name,
-          };
-        })() : storedViews[0]) ??
-        ({
-          id: crypto.randomUUID(),
-          name: initialName || "Diagram 1",
-          selectedTableKeys: getInitialFocusNodeIds(loaded),
-          layoutMode: "lr",
-          manualPositions: {},
-          tableListCollapsed: false,
-        } satisfies SavedDiagramView);
+      const { view: initialView, isNewRequestedView } = getInitialDiagramView(
+        diagramViewId,
+        storedViews,
+        loaded,
+        initialName
+      );
 
       setDiagram(loaded);
       setSavedViews(storedViews.length > 0 ? storedViews : [initialView]);
@@ -449,7 +477,7 @@ export function DatabaseDiagramWorkspace({
       setLayoutMode(initialView.layoutMode);
       setManualPositions(initialView.manualPositions);
       setTableListCollapsed(initialView.tableListCollapsed);
-      setIsDirty(!requestedView && Boolean(diagramViewId));
+      setIsDirty(isNewRequestedView);
     } catch (err) {
       setError(String(err));
     } finally {

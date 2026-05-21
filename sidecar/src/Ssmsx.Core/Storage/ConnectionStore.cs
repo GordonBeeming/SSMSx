@@ -22,11 +22,7 @@ public class ConnectionStore
         try
         {
             var connections = await ReadFileAsync();
-            var deduped = Deduplicate(connections);
-            if (deduped.Count != connections.Count)
-                await WriteFileAsync(deduped);
-
-            return deduped.OrderByDescending(ActivityDate).ToList();
+            return Deduplicate(connections).OrderByDescending(ActivityDate).ToList();
         }
         finally
         {
@@ -40,11 +36,7 @@ public class ConnectionStore
         try
         {
             var connections = await ReadFileAsync();
-            var deduped = Deduplicate(connections);
-            if (deduped.Count != connections.Count)
-                await WriteFileAsync(deduped);
-
-            return deduped.FirstOrDefault(c => c.Id == id);
+            return Deduplicate(connections).FirstOrDefault(c => c.Id == id);
         }
         finally
         {

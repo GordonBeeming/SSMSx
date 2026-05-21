@@ -107,7 +107,7 @@ function flattenFirstResultSet(resultSets: QueryResultSet[]): Pick<QueryResult, 
   return {
     columns: first?.columns ?? [],
     rows: first?.rows ?? [],
-    totalRows: resultSets.reduce((sum, set) => sum + set.totalRows, 0),
+    totalRows: first?.totalRows ?? 0,
   };
 }
 
