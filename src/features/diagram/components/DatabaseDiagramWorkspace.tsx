@@ -449,6 +449,7 @@ export function DatabaseDiagramWorkspace({
   const [activeViewId, setActiveViewId] = useState("");
   const [diagramName, setDiagramName] = useState("Diagram 1");
   const [isDirty, setIsDirty] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [tableListCollapsed, setTableListCollapsed] = useState(false);
   const [selectedTableKeys, setSelectedTableKeys] = useState<Set<string>>(new Set());
   const [manualPositions, setManualPositions] = useState<Record<string, { x: number; y: number }>>({});
@@ -556,10 +557,16 @@ export function DatabaseDiagramWorkspace({
       ...savedViews.filter((savedView) => savedView.id !== view.id),
       view,
     ];
+    if (!saveDiagramViews(connectionId, database, nextViews)) {
+      setSaveError("Diagram could not be saved. Check browser storage and try again.");
+      setIsDirty(true);
+      return;
+    }
+
     setSavedViews(nextViews);
     setActiveViewId(view.id);
-    saveDiagramViews(connectionId, database, nextViews);
     onTitleChange?.(view.name);
+    setSaveError(null);
     setIsDirty(false);
   };
 
@@ -691,6 +698,7 @@ export function DatabaseDiagramWorkspace({
         >
           {isDirty ? "Save*" : "Saved"}
         </button>
+        {saveError && <span className="text-xs text-error">{saveError}</span>}
         <button
           onClick={() => setMode("diagram")}
           className={`rounded px-3 py-1 text-sm ${

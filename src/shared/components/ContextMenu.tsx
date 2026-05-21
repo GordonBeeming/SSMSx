@@ -55,7 +55,7 @@ function ContextMenuItems({
 
     if (item.type === "submenu") {
       return (
-        <div key={item.label} className="context-menu-submenu relative">
+        <div key={`submenu-${i}-${item.label}`} className="context-menu-submenu relative">
           <button
             type="button"
             disabled={item.disabled}
@@ -76,7 +76,7 @@ function ContextMenuItems({
     return (
       <button
         type="button"
-        key={item.label}
+        key={`action-${i}-${item.label}`}
         disabled={item.disabled}
         className={`block w-full px-3 py-1.5 text-left text-sm hover:bg-bg-tertiary ${
           item.danger

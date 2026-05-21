@@ -9,6 +9,27 @@ export interface SavedDiagramView {
   tableListCollapsed: boolean;
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function loadManualPositions(value: unknown): Record<string, { x: number; y: number }> {
+  if (!isRecord(value)) {
+    return {};
+  }
+
+  return Object.fromEntries(
+    Object.entries(value).filter(
+      (entry): entry is [string, { x: number; y: number }] =>
+        isRecord(entry[1]) &&
+        typeof entry[1].x === "number" &&
+        Number.isFinite(entry[1].x) &&
+        typeof entry[1].y === "number" &&
+        Number.isFinite(entry[1].y)
+    )
+  );
+}
+
 export function diagramStorageKey(connectionId: string, database: string): string {
   return `ssmsx.diagramViews.${connectionId}.${database}`;
 }
@@ -26,7 +47,7 @@ export function loadSavedDiagramViews(connectionId: string, database: string): S
     }
 
     return parsed
-      .filter((view): view is Partial<SavedDiagramView> => typeof view === "object" && view !== null)
+      .filter(isRecord)
       .map((view, index) => ({
         id: typeof view.id === "string" && view.id.trim() ? view.id : crypto.randomUUID(),
         name: typeof view.name === "string" && view.name.trim()
@@ -36,7 +57,7 @@ export function loadSavedDiagramViews(connectionId: string, database: string): S
           ? view.selectedTableKeys.filter((key): key is string => typeof key === "string")
           : [],
         layoutMode: view.layoutMode === "tb" || view.layoutMode === "grid" ? view.layoutMode : "lr",
-        manualPositions: view.manualPositions ?? {},
+        manualPositions: loadManualPositions(view.manualPositions),
         tableListCollapsed: Boolean(view.tableListCollapsed),
       }));
   } catch {
