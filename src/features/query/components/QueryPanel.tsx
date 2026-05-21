@@ -78,7 +78,7 @@ export function QueryPanel() {
     }
   }, [activeTabId, cancelQuery]);
 
-  if (!activeTab || !activeTabId) {
+  if (!activeTab || !activeTabId || activeTab.kind === "diagram") {
     return null;
   }
 

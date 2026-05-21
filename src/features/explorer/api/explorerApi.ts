@@ -10,6 +10,7 @@ import type {
   FunctionInfo,
   DatabaseUserInfo,
   ObjectScriptResult,
+  DatabaseDiagramInfo,
 } from "../types";
 
 export async function explorerDatabases(
@@ -132,6 +133,17 @@ export async function explorerObjectDefinition(
     schema,
     objectName,
     objectType,
+  });
+  return JSON.parse(result);
+}
+
+export async function explorerDatabaseDiagram(
+  connectionId: string,
+  database: string
+): Promise<DatabaseDiagramInfo> {
+  const result = await invoke<string>("explorer_database_diagram", {
+    connectionId,
+    database,
   });
   return JSON.parse(result);
 }

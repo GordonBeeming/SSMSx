@@ -115,3 +115,12 @@ public record ExplorerObjectDefinitionParams
     [JsonPropertyName("objectType")]
     public required string ObjectType { get; init; }
 }
+
+public record ExplorerDatabaseDiagramParams
+{
+    [JsonPropertyName("connectionId")]
+    public required string ConnectionId { get; init; }
+
+    [JsonPropertyName("database")]
+    public required string Database { get; init; }
+}

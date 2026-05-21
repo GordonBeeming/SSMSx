@@ -32,7 +32,7 @@ interface ConnectionState {
   closeDialog: () => void;
   setDialogTab: (tab: DialogTab) => void;
   setSearchFilter: (filter: string) => void;
-  saveConnection: (info: ConnectionInfo, password?: string, clearCredential?: boolean) => Promise<void>;
+  saveConnection: (info: ConnectionInfo, password?: string, clearCredential?: boolean) => Promise<ConnectionInfo>;
   deleteConnection: (id: string) => Promise<void>;
   testConnection: (
     info: ConnectionInfo,
@@ -99,10 +99,12 @@ export const useConnectionStore = create<ConnectionState>((set, get) => ({
   saveConnection: async (info, password, clearCredential) => {
     set({ loading: true, error: null });
     try {
-      await connectionSave(info, password, clearCredential);
+      const saved = await connectionSave(info, password, clearCredential);
       await get().loadConnections();
+      return saved;
     } catch (e) {
       set({ error: String(e) });
+      throw e;
     } finally {
       set({ loading: false });
     }

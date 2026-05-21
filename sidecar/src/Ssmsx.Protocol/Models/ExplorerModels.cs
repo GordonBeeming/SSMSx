@@ -166,3 +166,81 @@ public record ObjectScriptResult
     [JsonPropertyName("definition")]
     public string? Definition { get; init; }
 }
+
+public record DatabaseDiagramInfo
+{
+    [JsonPropertyName("database")]
+    public required string Database { get; init; }
+
+    [JsonPropertyName("tables")]
+    public required List<DiagramTableInfo> Tables { get; init; }
+
+    [JsonPropertyName("relationships")]
+    public required List<DiagramRelationshipInfo> Relationships { get; init; }
+}
+
+public record DiagramTableInfo
+{
+    [JsonPropertyName("schema")]
+    public required string Schema { get; init; }
+
+    [JsonPropertyName("name")]
+    public required string Name { get; init; }
+
+    [JsonPropertyName("rowCount")]
+    public long RowCount { get; init; }
+
+    [JsonPropertyName("columns")]
+    public required List<DiagramColumnInfo> Columns { get; init; }
+
+    [JsonPropertyName("primaryKey")]
+    public required List<string> PrimaryKey { get; init; }
+}
+
+public record DiagramColumnInfo
+{
+    [JsonPropertyName("name")]
+    public required string Name { get; init; }
+
+    [JsonPropertyName("dataType")]
+    public required string DataType { get; init; }
+
+    [JsonPropertyName("isNullable")]
+    public bool IsNullable { get; init; }
+
+    [JsonPropertyName("isIdentity")]
+    public bool IsIdentity { get; init; }
+
+    [JsonPropertyName("isPrimaryKey")]
+    public bool IsPrimaryKey { get; init; }
+
+    [JsonPropertyName("isForeignKey")]
+    public bool IsForeignKey { get; init; }
+
+    [JsonPropertyName("defaultDefinition")]
+    public string? DefaultDefinition { get; init; }
+}
+
+public record DiagramRelationshipInfo
+{
+    [JsonPropertyName("name")]
+    public required string Name { get; init; }
+
+    [JsonPropertyName("fromSchema")]
+    public required string FromSchema { get; init; }
+
+    [JsonPropertyName("fromTable")]
+    public required string FromTable { get; init; }
+
+    [JsonPropertyName("fromColumns")]
+    public required List<string> FromColumns { get; init; }
+
+    [JsonPropertyName("toSchema")]
+    public required string ToSchema { get; init; }
+
+    [JsonPropertyName("toTable")]
+    public required string ToTable { get; init; }
+
+    [JsonPropertyName("toColumns")]
+    public required List<string> ToColumns { get; init; }
+}

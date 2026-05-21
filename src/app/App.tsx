@@ -3,6 +3,8 @@ import { listen } from "@tauri-apps/api/event";
 import { useConnectionStore, ConnectionDialog } from "../features/connection";
 import { useQueryStore, QueryPanel, QueryTabBar } from "../features/query";
 import { ObjectExplorerTree } from "../features/explorer";
+import { DatabaseDiagramWorkspace } from "../features/diagram";
+import { isTauriRuntime } from "../shared/utils/tauri";
 
 let tabCounter = 0;
 
@@ -23,7 +25,7 @@ function App() {
   );
   const hasConnections = activeConnections.length > 0;
 
-  const { tabs, activeTabId, addTab } = useQueryStore();
+  const { tabs, activeTabId, addTab, updateTab } = useQueryStore();
   const activeTab = tabs.find((t) => t.id === activeTabId);
 
   const createNewTab = useCallback(() => {
@@ -34,6 +36,7 @@ function App() {
     tabCounter++;
     addTab({
       id: crypto.randomUUID(),
+      kind: "query",
       connectionId: defaultConn.id,
       database: defaultConn.database ?? "master",
       title: `Query ${tabCounter}`,
@@ -48,8 +51,34 @@ function App() {
     return () => window.removeEventListener("query:new-tab", handler);
   }, [createNewTab]);
 
+  useEffect(() => {
+    const handler = (event: Event) => {
+      const detail = (event as CustomEvent<{
+        connectionId: string;
+        database: string;
+        diagramViewId?: string;
+        title?: string;
+      }>).detail;
+      if (detail?.connectionId && detail.database) {
+        addTab({
+          id: crypto.randomUUID(),
+          kind: "diagram",
+          connectionId: detail.connectionId,
+          database: detail.database,
+          diagramViewId: detail.diagramViewId,
+          title: detail.title || "Database Diagram",
+          connectionColor: connections.find((c) => c.id === detail.connectionId)?.color,
+        });
+      }
+    };
+    window.addEventListener("diagram:open", handler);
+    return () => window.removeEventListener("diagram:open", handler);
+  }, [addTab, connections]);
+
   // Listen for native menu events from Tauri
   useEffect(() => {
+    if (!isTauriRuntime()) return;
+
     const unlisteners: Array<() => void> = [];
 
     const setup = async () => {
@@ -185,11 +214,18 @@ function App() {
 
         {/* Content area */}
         <div className="flex flex-1 flex-col overflow-hidden">
-          {/* Query tabs bar */}
           {tabs.length > 0 && <QueryTabBar />}
 
-          {/* Tab content */}
-          {activeTab ? (
+          {activeTab?.kind === "diagram" ? (
+            <DatabaseDiagramWorkspace
+              connectionId={activeTab.connectionId}
+              database={activeTab.database}
+              diagramViewId={activeTab.diagramViewId}
+              initialName={activeTab.title}
+              onTitleChange={(title) => updateTab(activeTab.id, { title })}
+              onClose={() => useQueryStore.getState().removeTab(activeTab.id)}
+            />
+          ) : activeTab ? (
             <QueryPanel />
           ) : (
             <div className="flex flex-1 items-center justify-center overflow-auto">

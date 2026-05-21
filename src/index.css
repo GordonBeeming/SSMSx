@@ -12,6 +12,7 @@
   --color-accent-text: #ffffff;
   --color-error: #dc2626;
   --color-success: #16a34a;
+  --color-warning: #b45309;
 }
 
 body {
@@ -31,4 +32,8 @@ input, textarea, pre, [contenteditable] {
 ::placeholder {
   font-style: italic;
   opacity: 0.5;
+}
+
+.context-menu-submenu:hover > .context-menu-submenu-panel {
+  display: block;
 }

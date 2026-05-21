@@ -158,3 +158,16 @@ pub async fn explorer_object_definition(
         .await?;
     Ok(serde_json::to_string(&result).map_err(|e| e.to_string())?)
 }
+
+#[tauri::command]
+pub async fn explorer_database_diagram(
+    sidecar: tauri::State<'_, SidecarManager>,
+    connection_id: String,
+    database: String,
+) -> Result<String, String> {
+    let params = serde_json::json!({ "connectionId": connection_id, "database": database });
+    let result = sidecar
+        .send_request("explorer.databaseDiagram", Some(params))
+        .await?;
+    Ok(serde_json::to_string(&result).map_err(|e| e.to_string())?)
+}

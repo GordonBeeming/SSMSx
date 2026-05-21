@@ -7,7 +7,8 @@ use tauri::menu::{MenuBuilder, SubmenuBuilder, MenuItemBuilder, PredefinedMenuIt
 pub fn run() {
     let _ = env_logger::try_init();
 
-    tauri::Builder::default()
+    #[cfg_attr(not(feature = "dev-mcp"), allow(unused_mut))]
+    let mut builder = tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .setup(|app| {
             let handle = app.handle().clone();
@@ -35,7 +36,14 @@ pub fn run() {
             }
 
             Ok(())
-        })
+        });
+
+    #[cfg(feature = "dev-mcp")]
+    {
+        builder = builder.plugin(tauri_plugin_mcp_bridge::init());
+    }
+
+    builder
         .on_menu_event(|app, event| {
             let id = event.id().0.as_str();
             if let Some(window) = app.get_webview_window("main") {
@@ -64,6 +72,7 @@ pub fn run() {
             commands::explorer::explorer_functions,
             commands::explorer::explorer_users,
             commands::explorer::explorer_object_definition,
+            commands::explorer::explorer_database_diagram,
             commands::query::query_execute,
             commands::query::query_cancel,
             commands::query::intellisense_get_metadata,

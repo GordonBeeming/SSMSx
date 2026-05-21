@@ -103,8 +103,8 @@ export function ConnectionStringTab() {
     const result = await testConnection(info);
     if (!result.success) return;
 
-    await saveConnection(info);
-    await connect(info.id);
+    const saved = await saveConnection(info);
+    await connect(saved.id);
   };
 
   return (

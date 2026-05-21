@@ -43,6 +43,13 @@ namespace Ssmsx.Protocol;
 [JsonSerializable(typeof(DatabaseUserInfo))]
 [JsonSerializable(typeof(List<DatabaseUserInfo>))]
 [JsonSerializable(typeof(ObjectScriptResult))]
+[JsonSerializable(typeof(DatabaseDiagramInfo))]
+[JsonSerializable(typeof(DiagramTableInfo))]
+[JsonSerializable(typeof(List<DiagramTableInfo>))]
+[JsonSerializable(typeof(DiagramColumnInfo))]
+[JsonSerializable(typeof(List<DiagramColumnInfo>))]
+[JsonSerializable(typeof(DiagramRelationshipInfo))]
+[JsonSerializable(typeof(List<DiagramRelationshipInfo>))]
 // Explorer message params
 [JsonSerializable(typeof(ExplorerDatabasesParams))]
 [JsonSerializable(typeof(ExplorerTablesParams))]
@@ -54,6 +61,7 @@ namespace Ssmsx.Protocol;
 [JsonSerializable(typeof(ExplorerFunctionsParams))]
 [JsonSerializable(typeof(ExplorerUsersParams))]
 [JsonSerializable(typeof(ExplorerObjectDefinitionParams))]
+[JsonSerializable(typeof(ExplorerDatabaseDiagramParams))]
 // IntelliSense DTOs
 [JsonSerializable(typeof(IntelliSenseGetMetadataParams))]
 [JsonSerializable(typeof(IntelliSenseMetadata))]

@@ -1,8 +1,9 @@
-import { useRef, useCallback, useEffect, useState } from "react";
+import { useRef, useCallback, useEffect } from "react";
 import Editor, { type OnMount, type Monaco } from "@monaco-editor/react";
 import type { editor as monacoEditor, IDisposable } from "monaco-editor";
 import { SqlCompletionProvider } from "./intellisense/SqlCompletionProvider";
 import type { IntelliSenseMetadata } from "../api/queryApi";
+import { useAppEditorTheme } from "../../../shared/hooks/useAppEditorTheme";
 
 interface QueryEditorProps {
   value: string;
@@ -10,24 +11,6 @@ interface QueryEditorProps {
   onExecute: () => void;
   onExecuteSelection: (sql: string) => void;
   intellisenseMetadata?: IntelliSenseMetadata | null;
-}
-
-/** Detect system color scheme preference */
-function useColorScheme(): "vs" | "vs-dark" {
-  const [scheme, setScheme] = useState<"vs" | "vs-dark">(() =>
-    window.matchMedia("(prefers-color-scheme: dark)").matches ? "vs-dark" : "vs"
-  );
-
-  useEffect(() => {
-    const mq = window.matchMedia("(prefers-color-scheme: dark)");
-    const handler = (e: MediaQueryListEvent) => {
-      setScheme(e.matches ? "vs-dark" : "vs");
-    };
-    mq.addEventListener("change", handler);
-    return () => mq.removeEventListener("change", handler);
-  }, []);
-
-  return scheme;
 }
 
 export function QueryEditor({
@@ -41,7 +24,7 @@ export function QueryEditor({
   const completionProviderRef = useRef<SqlCompletionProvider | null>(null);
   const disposableRef = useRef<IDisposable | null>(null);
   const monacoRef = useRef<Monaco | null>(null);
-  const theme = useColorScheme();
+  const theme = useAppEditorTheme();
 
   // Keep latest callbacks in refs so Monaco actions always call the current ones
   const onExecuteRef = useRef(onExecute);

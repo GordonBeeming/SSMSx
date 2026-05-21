@@ -87,6 +87,45 @@ public class ConnectionStoreTests : IDisposable
     }
 
     [Fact]
+    public async Task SaveAsync_ReusesExistingConnection_WhenDetailsMatch()
+    {
+        var createdAt = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        var existing = new ConnectionInfo
+        {
+            Id = "existing",
+            Name = "Original",
+            ServerName = "127.0.0.1,4242",
+            AuthType = AuthType.ConnectionString,
+            Username = "sa",
+            Database = "AdventureWorks2022",
+            Encrypt = EncryptMode.Optional,
+            TrustServerCertificate = true,
+            ConnectionString = "Server=127.0.0.1,4242;Database=AdventureWorks2022;User Id=sa;Password=one;Encrypt=Optional;TrustServerCertificate=True;",
+            CreatedAt = createdAt,
+            CredentialRef = "ssmsx/existing"
+        };
+        var duplicate = existing with
+        {
+            Id = "duplicate",
+            Name = "Duplicate",
+            ConnectionString = "Data Source=127.0.0.1,4242;Initial Catalog=AdventureWorks2022;UID=sa;PWD=two;Trust Server Certificate=True;Encrypt=Optional;",
+            LastUsed = new DateTime(2026, 1, 2, 0, 0, 0, DateTimeKind.Utc)
+        };
+
+        await _store.SaveAsync(existing);
+        var saved = await _store.SaveAsync(duplicate);
+
+        var result = await _store.ListAsync();
+        Assert.Single(result);
+        Assert.Equal("existing", saved.Id);
+        Assert.Equal("existing", result[0].Id);
+        Assert.Equal("Duplicate", result[0].Name);
+        Assert.Equal("ssmsx/existing", result[0].CredentialRef);
+        Assert.Equal(createdAt, result[0].CreatedAt);
+        Assert.Equal(duplicate.LastUsed, result[0].LastUsed);
+    }
+
+    [Fact]
     public async Task ListAsync_ReturnsSortedByLastUsedDescending()
     {
         var oldest = new ConnectionInfo

@@ -13,7 +13,14 @@ export interface QueryMessage {
   lineNumber?: number;
 }
 
+export interface QueryResultSet {
+  columns: QueryColumn[];
+  rows: unknown[][];
+  totalRows: number;
+}
+
 export interface QueryResult {
+  resultSets: QueryResultSet[];
   columns: QueryColumn[];
   rows: unknown[][];
   messages: QueryMessage[];
@@ -23,8 +30,10 @@ export interface QueryResult {
 
 export interface QueryTab {
   id: string;
+  kind?: "query" | "diagram";
   connectionId: string;
   database: string;
+  diagramViewId?: string;
   initialSql?: string;
   title: string;
   connectionColor?: string;
