@@ -11,8 +11,22 @@ const MAX_DISPLAY_ROWS = 1000;
 type ActiveTab = "results" | "messages";
 
 export function QueryResultsTable({ result }: QueryResultsTableProps) {
-  const hasData = result.columns.length > 0 && result.rows.length > 0;
+  const resultSets =
+    result.resultSets.length > 0
+      ? result.resultSets
+      : [
+          {
+            columns: result.columns,
+            rows: result.rows,
+            totalRows: result.totalRows,
+          },
+        ];
+  const visibleResultSets = resultSets.filter(
+    (set) => set.columns.length > 0 || set.rows.length > 0
+  );
+  const hasData = visibleResultSets.length > 0;
   const hasMessages = result.messages.length > 0;
+  const [activeResultSetIndex, setActiveResultSetIndex] = useState(0);
 
   // Default tab: Results if we have data, otherwise Messages.
   // Users can click to switch between them when both exist.
@@ -28,24 +42,37 @@ export function QueryResultsTable({ result }: QueryResultsTableProps) {
     } else if (activeTab === "messages" && !hasMessages && hasData) {
       setActiveTab("results");
     }
-  }, [hasData, hasMessages, activeTab]);
+    if (activeResultSetIndex >= visibleResultSets.length) {
+      setActiveResultSetIndex(0);
+    }
+  }, [hasData, hasMessages, activeTab, activeResultSetIndex, visibleResultSets.length]);
+
+  const activeResultSet =
+    visibleResultSets[activeResultSetIndex] ?? visibleResultSets[0];
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
       {/* Tab header — both tabs are clickable when present */}
       <div className="flex border-b border-bg-tertiary bg-bg-secondary text-xs">
         {hasData && (
-          <button
-            type="button"
-            onClick={() => setActiveTab("results")}
-            className={`px-3 py-1 ${
-              activeTab === "results"
-                ? "border-b-2 border-accent text-text-primary"
-                : "text-text-secondary hover:text-text-primary"
-            }`}
-          >
-            Results ({result.totalRows.toLocaleString()})
-          </button>
+          visibleResultSets.map((set, index) => (
+            <button
+              key={index}
+              type="button"
+              onClick={() => {
+                setActiveTab("results");
+                setActiveResultSetIndex(index);
+              }}
+              className={`px-3 py-1 ${
+                activeTab === "results" && activeResultSetIndex === index
+                  ? "border-b-2 border-accent text-text-primary"
+                  : "text-text-secondary hover:text-text-primary"
+              }`}
+            >
+              Results {visibleResultSets.length > 1 ? index + 1 : ""} (
+              {set.totalRows.toLocaleString()})
+            </button>
+          ))
         )}
         {hasMessages && (
           <button
@@ -63,12 +90,12 @@ export function QueryResultsTable({ result }: QueryResultsTableProps) {
       </div>
 
       {/* Data grid */}
-      {activeTab === "results" && hasData && (
+      {activeTab === "results" && activeResultSet && (
         <div className="flex-1 overflow-auto">
           <table className="w-full border-collapse text-xs">
             <thead className="sticky top-0 bg-bg-secondary">
               <tr>
-                {result.columns.map((col, i) => (
+                {activeResultSet.columns.map((col, i) => (
                   <th
                     key={`${col.name}-${i}`}
                     className="whitespace-nowrap border-b border-r border-bg-tertiary px-2 py-1 text-left font-medium text-text-secondary"
@@ -80,7 +107,7 @@ export function QueryResultsTable({ result }: QueryResultsTableProps) {
               </tr>
             </thead>
             <tbody>
-              {result.rows.slice(0, MAX_DISPLAY_ROWS).map((row, rowIndex) => (
+              {activeResultSet.rows.slice(0, MAX_DISPLAY_ROWS).map((row, rowIndex) => (
                 <tr
                   key={rowIndex}
                   className="hover:bg-bg-secondary"
@@ -97,11 +124,10 @@ export function QueryResultsTable({ result }: QueryResultsTableProps) {
               ))}
             </tbody>
           </table>
-          {result.rows.length > MAX_DISPLAY_ROWS && (
+          {activeResultSet.rows.length > MAX_DISPLAY_ROWS && (
             <div className="bg-bg-secondary px-3 py-1.5 text-center text-xs text-text-secondary">
               Showing {MAX_DISPLAY_ROWS.toLocaleString()} of{" "}
-              {result.totalRows.toLocaleString()} rows. Full virtualized grid
-              coming in M4.
+              {activeResultSet.totalRows.toLocaleString()} rows.
             </div>
           )}
         </div>

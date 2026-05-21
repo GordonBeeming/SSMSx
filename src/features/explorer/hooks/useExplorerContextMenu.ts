@@ -9,6 +9,10 @@ import {
 } from "../api/explorerApi";
 import type { ContextMenuItem } from "../../../shared/components/ContextMenu";
 import { quoteSqlName } from "../../../shared/utils/sql";
+import {
+  createEmptyDiagramView,
+  loadSavedDiagramViews,
+} from "../../diagram/utils/savedDiagrams";
 
 /**
  * Build a SELECT TOP 1000 script for a table or view.
@@ -44,6 +48,38 @@ export function useExplorerContextMenu() {
   const getMenuItems = useCallback(
     (node: ExplorerNode): ContextMenuItem[] => {
       const items: ContextMenuItem[] = [];
+      const openNewQuery = () => {
+        if (!node.database) {
+          console.error(`Expected database on node ${node.id} but it was undefined`);
+          return;
+        }
+        addTab({
+          id: crypto.randomUUID(),
+          kind: "query",
+          connectionId: node.connectionId,
+          database: node.database,
+          title: "Query",
+        });
+      };
+      const openNewDiagram = () => {
+        if (!node.database) {
+          console.error(`Expected database on node ${node.id} but it was undefined`);
+          return;
+        }
+        const view = createEmptyDiagramView(
+          loadSavedDiagramViews(node.connectionId, node.database)
+        );
+        window.dispatchEvent(
+          new CustomEvent("diagram:open", {
+            detail: {
+              connectionId: node.connectionId,
+              database: node.database,
+              diagramViewId: view.id,
+              title: view.name,
+            },
+          })
+        );
+      };
 
       switch (node.type) {
         case "server":
@@ -62,6 +98,23 @@ export function useExplorerContextMenu() {
           break;
 
         case "database":
+          items.push({
+            type: "submenu",
+            label: "New",
+            items: [
+              {
+                type: "action",
+                label: "Query",
+                onClick: openNewQuery,
+              },
+              {
+                type: "action",
+                label: "Diagram",
+                onClick: openNewDiagram,
+              },
+            ],
+          });
+          items.push({ type: "separator" });
           items.push({
             type: "action",
             label: "Refresh",
@@ -284,10 +337,41 @@ export function useExplorerContextMenu() {
           break;
 
         case "folder":
+          if (node.folderKind === "diagrams") {
+            items.push({
+              type: "action",
+              label: "New Diagram",
+              onClick: openNewDiagram,
+            });
+            items.push({ type: "separator" });
+          }
           items.push({
             type: "action",
             label: "Refresh",
             onClick: () => refreshNode(node.id),
+          });
+          break;
+
+        case "diagram":
+          items.push({
+            type: "action",
+            label: "Open",
+            onClick: () => {
+              if (!node.database || !node.diagramViewId) {
+                console.error(`Expected database and diagramViewId on node ${node.id}`);
+                return;
+              }
+              window.dispatchEvent(
+                new CustomEvent("diagram:open", {
+                  detail: {
+                    connectionId: node.connectionId,
+                    database: node.database,
+                    diagramViewId: node.diagramViewId,
+                    title: node.name,
+                  },
+                })
+              );
+            },
           });
           break;
 

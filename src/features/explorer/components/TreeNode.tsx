@@ -23,6 +23,18 @@ export function TreeNode({ node, depth, onContextMenu }: TreeNodeProps) {
       onClick={() => selectNode(node.id)}
       onDoubleClick={() => {
         if (node.hasChildren) toggleExpand(node.id);
+        if (node.type === "diagram" && node.database && node.diagramViewId) {
+          window.dispatchEvent(
+            new CustomEvent("diagram:open", {
+              detail: {
+                connectionId: node.connectionId,
+                database: node.database,
+                diagramViewId: node.diagramViewId,
+                title: node.name,
+              },
+            })
+          );
+        }
       }}
       onContextMenu={(e) => onContextMenu(e, node)}
       role="treeitem"

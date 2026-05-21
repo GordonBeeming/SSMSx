@@ -88,6 +88,15 @@ export function NodeIcon({ type, folderKind }: NodeIconProps) {
           <path d="M2.5 14c0-3 2.5-5 5.5-5s5.5 2 5.5 5" />
         </svg>
       );
+    case "diagram":
+      return (
+        <svg className={className} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.2">
+          <rect x="2" y="3" width="4" height="3" rx="0.5" />
+          <rect x="10" y="3" width="4" height="3" rx="0.5" />
+          <rect x="6" y="10" width="4" height="3" rx="0.5" />
+          <path d="M6 4.5h4M8 6v4" />
+        </svg>
+      );
     case "folder":
       return (
         <svg className={className} viewBox="0 0 16 16" fill="currentColor" opacity="0.6">

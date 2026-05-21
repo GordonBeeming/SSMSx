@@ -1,4 +1,4 @@
-import { useRef, useState, useMemo, useCallback } from "react";
+import { useEffect, useRef, useState, useMemo, useCallback } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { useExplorerStore } from "../store/explorerStore";
 import type { ExplorerNode } from "../types";
@@ -12,6 +12,7 @@ export function ObjectExplorerTree() {
   const nodes = useExplorerStore((s) => s.nodes);
   const rootNodeIds = useExplorerStore((s) => s.rootNodeIds);
   const getVisibleNodes = useExplorerStore((s) => s.getVisibleNodes);
+  const refreshNode = useExplorerStore((s) => s.refreshNode);
   const visibleNodes = useMemo(() => getVisibleNodes(), [nodes, rootNodeIds, getVisibleNodes]);
   const parentRef = useRef<HTMLDivElement>(null);
   const handleKeyDown = useTreeKeyboard(visibleNodes);
@@ -22,6 +23,32 @@ export function ObjectExplorerTree() {
     y: number;
     node: ExplorerNode;
   } | null>(null);
+
+  useEffect(() => {
+    const handler = (event: Event) => {
+      const detail = (event as CustomEvent<{
+        connectionId: string;
+        database: string;
+      }>).detail;
+      if (!detail?.connectionId || !detail.database) {
+        return;
+      }
+
+      const diagramsFolder = Object.values(useExplorerStore.getState().nodes).find(
+        (node) =>
+          node.connectionId === detail.connectionId &&
+          node.database === detail.database &&
+          node.type === "folder" &&
+          node.folderKind === "diagrams" &&
+          node.loaded
+      );
+      if (diagramsFolder) {
+        void refreshNode(diagramsFolder.id);
+      }
+    };
+    window.addEventListener("diagram:views-changed", handler);
+    return () => window.removeEventListener("diagram:views-changed", handler);
+  }, [refreshNode]);
 
   const virtualizer = useVirtualizer({
     count: visibleNodes.length,

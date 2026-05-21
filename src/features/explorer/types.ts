@@ -9,7 +9,8 @@ export type ExplorerNodeType =
   | "index"
   | "procedure"
   | "function"
-  | "user";
+  | "user"
+  | "diagram";
 
 export interface ExplorerNode {
   id: string;
@@ -20,6 +21,7 @@ export interface ExplorerNode {
   schema?: string;
   database?: string;
   tableName?: string;
+  diagramViewId?: string;
   expanded: boolean;
   loading: boolean;
   loaded: boolean;
@@ -103,4 +105,38 @@ export interface DatabaseUserInfo {
 
 export interface ObjectScriptResult {
   definition?: string;
+}
+
+export interface DatabaseDiagramInfo {
+  database: string;
+  tables: DiagramTableInfo[];
+  relationships: DiagramRelationshipInfo[];
+}
+
+export interface DiagramTableInfo {
+  schema: string;
+  name: string;
+  rowCount: number;
+  columns: DiagramColumnInfo[];
+  primaryKey: string[];
+}
+
+export interface DiagramColumnInfo {
+  name: string;
+  dataType: string;
+  isNullable: boolean;
+  isIdentity: boolean;
+  isPrimaryKey: boolean;
+  isForeignKey: boolean;
+  defaultDefinition?: string;
+}
+
+export interface DiagramRelationshipInfo {
+  name: string;
+  fromSchema: string;
+  fromTable: string;
+  fromColumns: string[];
+  toSchema: string;
+  toTable: string;
+  toColumns: string[];
 }

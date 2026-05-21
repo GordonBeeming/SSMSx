@@ -74,29 +74,28 @@ var handlers = new Dictionary<string, Func<JsonElement?, Task<JsonElement>>>
         ConnectionInfo saved;
         if (!string.IsNullOrEmpty(args.Password))
         {
-            var credKey = $"ssmsx/{args.Connection.Id}";
+            saved = await connectionStore.SaveAsync(args.Connection);
+            var credKey = $"ssmsx/{saved.Id}";
             await credentialStore.StoreAsync(credKey, args.Password);
-            saved = args.Connection with { CredentialRef = credKey };
-            await connectionStore.SaveAsync(saved);
+            saved = await connectionStore.SaveAsync(saved with { CredentialRef = credKey });
         }
         else if (args.ClearCredential)
         {
-            var existing = await connectionStore.GetAsync(args.Connection.Id);
-            if (existing?.CredentialRef != null)
+            saved = await connectionStore.SaveAsync(args.Connection);
+            if (saved.CredentialRef != null)
             {
-                try { await credentialStore.DeleteAsync(existing.CredentialRef); }
-                catch (Exception ex) { await Console.Error.WriteLineAsync($"Warning: Failed to delete credential '{existing.CredentialRef}': {ex.Message}"); }
+                try { await credentialStore.DeleteAsync(saved.CredentialRef); }
+                catch (Exception ex) { await Console.Error.WriteLineAsync($"Warning: Failed to delete credential '{saved.CredentialRef}': {ex.Message}"); }
             }
-            saved = args.Connection with { CredentialRef = null };
-            await connectionStore.SaveAsync(saved);
+            saved = await connectionStore.SaveAsync(saved with { CredentialRef = null });
         }
         else
         {
             var existing = await connectionStore.GetAsync(args.Connection.Id);
-            saved = existing?.CredentialRef != null
+            var connectionToSave = existing?.CredentialRef != null
                 ? args.Connection with { CredentialRef = existing.CredentialRef }
                 : args.Connection;
-            await connectionStore.SaveAsync(saved);
+            saved = await connectionStore.SaveAsync(connectionToSave);
         }
         return JsonSerializer.SerializeToElement(saved, ProtocolJsonContext.Default.ConnectionInfo);
     },
@@ -125,7 +124,7 @@ var handlers = new Dictionary<string, Func<JsonElement?, Task<JsonElement>>>
         catch (Exception ex)
         {
             return JsonSerializer.SerializeToElement(
-                new ConnectionTestResult { Success = false, Error = ex.Message },
+                new ConnectionTestResult { Success = false, Error = ex.ToString() },
                 ProtocolJsonContext.Default.ConnectionTestResult);
         }
     },
@@ -214,6 +213,13 @@ var handlers = new Dictionary<string, Func<JsonElement?, Task<JsonElement>>>
         var args = Deserialize<ExplorerObjectDefinitionParams>(p, ProtocolJsonContext.Default.ExplorerObjectDefinitionParams);
         var result = await schemaDiscovery.GetObjectDefinitionAsync(args.ConnectionId, args.Database, args.Schema, args.ObjectName, args.ObjectType);
         return JsonSerializer.SerializeToElement(result, ProtocolJsonContext.Default.ObjectScriptResult);
+    },
+
+    ["explorer.databaseDiagram"] = async p =>
+    {
+        var args = Deserialize<ExplorerDatabaseDiagramParams>(p, ProtocolJsonContext.Default.ExplorerDatabaseDiagramParams);
+        var result = await schemaDiscovery.GetDatabaseDiagramAsync(args.ConnectionId, args.Database);
+        return JsonSerializer.SerializeToElement(result, ProtocolJsonContext.Default.DatabaseDiagramInfo);
     },
 
     ["intellisense.getMetadata"] = async p =>
@@ -329,7 +335,7 @@ foreach (var requestLine in requestQueue.GetConsumingEnumerable())
 async Task HandleQueryExecute(string requestId, JsonElement? p)
 {
     var args = Deserialize<QueryExecuteParams>(p, ProtocolJsonContext.Default.QueryExecuteParams);
-    var queryId = Guid.NewGuid().ToString();
+    var queryId = requestId;
     using var cts = new CancellationTokenSource();
     queryCancellationManager.Register(queryId, cts);
 

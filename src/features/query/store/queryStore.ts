@@ -3,6 +3,7 @@ import type {
   QueryTab,
   QueryExecutionState,
   QueryResult,
+  QueryResultSet,
   QueryBatchPayload,
   QueryColumn,
   QueryMessage,
@@ -37,6 +38,7 @@ interface QueryState {
   reorderTabs: (fromIndex: number, toIndex: number) => void;
   closeOtherTabs: (tabId: string) => void;
   closeAllTabs: () => void;
+  updateTab: (tabId: string, patch: Partial<QueryTab>) => void;
 
   // Query execution
   executeQuery: (tabId: string, sql?: string) => Promise<void>;
@@ -57,6 +59,7 @@ interface QueryState {
 
 function emptyResult(): QueryResult {
   return {
+    resultSets: [],
     columns: [],
     rows: [],
     messages: [],
@@ -82,6 +85,32 @@ function findTabByIds(
   return null;
 }
 
+function updateResultSet(
+  resultSets: QueryResultSet[],
+  index: number,
+  columns?: QueryColumn[],
+  rows?: unknown[][]
+): QueryResultSet[] {
+  const next = [...resultSets];
+  const existing = next[index] ?? { columns: [], rows: [], totalRows: 0 };
+  const nextRows = [...existing.rows, ...(rows ?? [])];
+  next[index] = {
+    columns: columns && columns.length > 0 ? columns : existing.columns,
+    rows: nextRows,
+    totalRows: nextRows.length,
+  };
+  return next;
+}
+
+function flattenFirstResultSet(resultSets: QueryResultSet[]): Pick<QueryResult, "columns" | "rows" | "totalRows"> {
+  const first = resultSets.find((set) => set.columns.length > 0 || set.rows.length > 0);
+  return {
+    columns: first?.columns ?? [],
+    rows: first?.rows ?? [],
+    totalRows: resultSets.reduce((sum, set) => sum + set.totalRows, 0),
+  };
+}
+
 export const useQueryStore = create<QueryState>((set, get) => ({
   tabs: [],
   activeTabId: null,
@@ -96,7 +125,7 @@ export const useQueryStore = create<QueryState>((set, get) => ({
       activeTabId: tab.id,
       tabSql: {
         ...state.tabSql,
-        [tab.id]: tab.initialSql ?? "",
+        ...(tab.kind === "diagram" ? {} : { [tab.id]: tab.initialSql ?? "" }),
       },
     })),
 
@@ -121,6 +150,13 @@ export const useQueryStore = create<QueryState>((set, get) => ({
     }),
 
   setActiveTab: (id) => set({ activeTabId: id }),
+
+  updateTab: (tabId, patch) =>
+    set((state) => ({
+      tabs: state.tabs.map((tab) =>
+        tab.id === tabId ? { ...tab, ...patch } : tab
+      ),
+    })),
 
   updateSql: (tabId, sql) =>
     set((state) => ({
@@ -176,6 +212,9 @@ export const useQueryStore = create<QueryState>((set, get) => ({
       console.error(`Cannot execute query: tab '${tabId}' not found`);
       return;
     }
+    if (tab.kind === "diagram") {
+      return;
+    }
 
     // Guard against re-entry: F5/menu/toolbar can all trigger executeQuery,
     // and restarting mid-run would orphan the in-flight query in the sidecar
@@ -203,7 +242,7 @@ export const useQueryStore = create<QueryState>((set, get) => ({
         ...s.executionInfo,
         [tabId]: {
           state: "executing",
-          queryId: null,
+          queryId: requestId,
           requestId,
           startTime: Date.now(),
         },
@@ -264,11 +303,18 @@ export const useQueryStore = create<QueryState>((set, get) => ({
 
     set((s) => {
       const existing = s.results[tabId] ?? emptyResult();
-      const newColumns: QueryColumn[] =
-        payload.columns && payload.columns.length > 0
-          ? payload.columns
-          : existing.columns;
-      const newRows = [...existing.rows, ...(payload.rows ?? [])];
+      const hasResultData =
+        (payload.columns && payload.columns.length > 0) ||
+        (payload.rows && payload.rows.length > 0);
+      const resultSets = hasResultData
+        ? updateResultSet(
+            existing.resultSets,
+            payload.resultSetIndex ?? 0,
+            payload.columns,
+            payload.rows
+          )
+        : existing.resultSets;
+      const flattened = flattenFirstResultSet(resultSets);
       const newMessages = [
         ...existing.messages,
         ...(payload.messages ?? []),
@@ -285,11 +331,12 @@ export const useQueryStore = create<QueryState>((set, get) => ({
         results: {
           ...s.results,
           [tabId]: {
-            columns: newColumns,
-            rows: newRows,
+            resultSets,
+            columns: flattened.columns,
+            rows: flattened.rows,
             messages: newMessages,
             executionTimeMs: payload.executionTimeMs ?? existing.executionTimeMs,
-            totalRows: newRows.length,
+            totalRows: flattened.totalRows,
           },
         },
       };
@@ -302,7 +349,18 @@ export const useQueryStore = create<QueryState>((set, get) => ({
 
     set((s) => {
       const existing = s.results[tabId] ?? emptyResult();
-      const newRows = [...existing.rows, ...(payload.rows ?? [])];
+      const hasResultData =
+        (payload.columns && payload.columns.length > 0) ||
+        (payload.rows && payload.rows.length > 0);
+      const resultSets = hasResultData
+        ? updateResultSet(
+            existing.resultSets,
+            payload.resultSetIndex ?? 0,
+            payload.columns,
+            payload.rows
+          )
+        : existing.resultSets;
+      const flattened = flattenFirstResultSet(resultSets);
       const finalMessages: QueryMessage[] = [
         ...existing.messages,
         ...(payload.messages ?? []),
@@ -326,15 +384,13 @@ export const useQueryStore = create<QueryState>((set, get) => ({
         results: {
           ...s.results,
           [tabId]: {
-            columns:
-              payload.columns && payload.columns.length > 0
-                ? payload.columns
-                : existing.columns,
-            rows: newRows,
+            resultSets,
+            columns: flattened.columns,
+            rows: flattened.rows,
             messages: finalMessages,
             executionTimeMs:
               payload.executionTimeMs ?? existing.executionTimeMs,
-            totalRows: payload.totalRows ?? newRows.length,
+            totalRows: payload.totalRows ?? flattened.totalRows,
           },
         },
       };
@@ -403,6 +459,9 @@ export const useQueryStore = create<QueryState>((set, get) => ({
 
   isTabDirty: (tabId) => {
     const tab = get().tabs.find((t) => t.id === tabId);
+    if (tab?.kind === "diagram") {
+      return false;
+    }
     const sql = get().tabSql[tabId] ?? "";
     return sql !== (tab?.initialSql ?? "");
   },

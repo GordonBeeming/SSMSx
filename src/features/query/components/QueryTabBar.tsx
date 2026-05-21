@@ -74,7 +74,7 @@ export function QueryTabBar() {
                 onClick={() => setActiveTab(tab.id)}
                 title={`${tab.database} — ${tab.title}`}
               >
-                {tab.database ? `${tab.database} — ` : ""}
+                {tab.kind === "diagram" ? "Diagram — " : tab.database ? `${tab.database} — ` : ""}
                 {tab.title}
               </button>
               {dirty && (

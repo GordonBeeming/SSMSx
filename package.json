@@ -7,7 +7,10 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "tauri:dev": "tauri dev --config src-tauri/tauri.conf.dev.json --features dev-mcp",
+    "smoke:sidecar": "node scripts/smoke-sidecar.mjs",
+    "smoke:tauri-mcp": "node scripts/smoke-tauri-mcp.mjs"
   },
   "dependencies": {
     "@monaco-editor/react": "^4.7.0",
@@ -15,12 +18,18 @@
     "@tanstack/react-virtual": "^3.13.23",
     "@tauri-apps/api": "^2",
     "@tauri-apps/plugin-shell": "^2",
+    "@xyflow/react": "^12.10.2",
+    "dagre": "^0.8.5",
+    "lucide-react": "^1.16.0",
     "react": "^19",
     "react-dom": "^19",
     "tailwindcss": "^4.2.1",
     "zustand": "^5.0.12"
   },
   "devDependencies": {
+    "@playwright/test": "^1.60.0",
+    "@tauri-apps/cli": "^2.11.2",
+    "@types/dagre": "^0.7.54",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@vitejs/plugin-react": "^4",

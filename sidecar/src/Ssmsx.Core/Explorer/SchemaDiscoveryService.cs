@@ -440,6 +440,154 @@ public partial class SchemaDiscoveryService
         });
     }
 
+    public Task<DatabaseDiagramInfo> GetDatabaseDiagramAsync(string connectionId, string database)
+    {
+        return WithDatabaseAsync(connectionId, database, async connection =>
+        {
+            const string tableSql = """
+                WITH row_counts AS (
+                    SELECT object_id, SUM(rows) AS row_count
+                    FROM sys.partitions
+                    WHERE index_id IN (0, 1)
+                    GROUP BY object_id
+                ),
+                pk_columns AS (
+                    SELECT ic.object_id, ic.column_id
+                    FROM sys.key_constraints kc
+                    JOIN sys.index_columns ic
+                      ON kc.parent_object_id = ic.object_id
+                     AND kc.unique_index_id = ic.index_id
+                    WHERE kc.type = 'PK'
+                ),
+                fk_columns AS (
+                    SELECT DISTINCT parent_object_id AS object_id, parent_column_id AS column_id
+                    FROM sys.foreign_key_columns
+                )
+                SELECT
+                    s.name AS schema_name,
+                    t.name AS table_name,
+                    ISNULL(rc.row_count, 0) AS row_count,
+                    c.name AS column_name,
+                    CASE
+                        WHEN ty.name IN ('char','varchar','binary','varbinary')
+                            THEN ty.name + '(' + CASE WHEN c.max_length = -1 THEN 'max' ELSE CONVERT(varchar(10), c.max_length) END + ')'
+                        WHEN ty.name IN ('nchar','nvarchar')
+                            THEN ty.name + '(' + CASE WHEN c.max_length = -1 THEN 'max' ELSE CONVERT(varchar(10), c.max_length / 2) END + ')'
+                        WHEN ty.name IN ('decimal','numeric')
+                            THEN ty.name + '(' + CONVERT(varchar(10), c.precision) + ',' + CONVERT(varchar(10), c.scale) + ')'
+                        WHEN ty.name IN ('datetime2','datetimeoffset','time')
+                            THEN ty.name + '(' + CONVERT(varchar(10), c.scale) + ')'
+                        ELSE ty.name
+                    END AS data_type,
+                    c.is_nullable,
+                    c.is_identity,
+                    CASE WHEN pk.object_id IS NULL THEN CONVERT(bit, 0) ELSE CONVERT(bit, 1) END AS is_primary_key,
+                    CASE WHEN fk.object_id IS NULL THEN CONVERT(bit, 0) ELSE CONVERT(bit, 1) END AS is_foreign_key,
+                    dc.definition AS default_definition
+                FROM sys.tables t
+                JOIN sys.schemas s ON t.schema_id = s.schema_id
+                JOIN sys.columns c ON t.object_id = c.object_id
+                JOIN sys.types ty ON c.user_type_id = ty.user_type_id
+                LEFT JOIN row_counts rc ON t.object_id = rc.object_id
+                LEFT JOIN pk_columns pk ON c.object_id = pk.object_id AND c.column_id = pk.column_id
+                LEFT JOIN fk_columns fk ON c.object_id = fk.object_id AND c.column_id = fk.column_id
+                LEFT JOIN sys.default_constraints dc ON c.default_object_id = dc.object_id
+                WHERE t.is_ms_shipped = 0
+                ORDER BY s.name, t.name, c.column_id
+                """;
+
+            var tables = new Dictionary<string, DiagramTableInfo>(StringComparer.OrdinalIgnoreCase);
+
+            await using (var cmd = new SqlCommand(tableSql, connection) { CommandTimeout = DefaultCommandTimeoutSeconds })
+            await using (var reader = await cmd.ExecuteReaderAsync())
+            {
+                while (await reader.ReadAsync())
+                {
+                    var schema = reader.GetString(0);
+                    var tableName = reader.GetString(1);
+                    var key = $"{schema}.{tableName}";
+
+                    if (!tables.TryGetValue(key, out var table))
+                    {
+                        table = new DiagramTableInfo
+                        {
+                            Schema = schema,
+                            Name = tableName,
+                            RowCount = reader.GetInt64(2),
+                            Columns = new List<DiagramColumnInfo>(),
+                            PrimaryKey = new List<string>()
+                        };
+                        tables[key] = table;
+                    }
+
+                    var columnName = reader.GetString(3);
+                    var isPrimaryKey = reader.GetBoolean(7);
+                    if (isPrimaryKey)
+                        table.PrimaryKey.Add(columnName);
+
+                    table.Columns.Add(new DiagramColumnInfo
+                    {
+                        Name = columnName,
+                        DataType = reader.GetString(4),
+                        IsNullable = reader.GetBoolean(5),
+                        IsIdentity = reader.GetBoolean(6),
+                        IsPrimaryKey = isPrimaryKey,
+                        IsForeignKey = reader.GetBoolean(8),
+                        DefaultDefinition = reader.IsDBNull(9) ? null : reader.GetString(9)
+                    });
+                }
+            }
+
+            const string relationshipSql = """
+                SELECT
+                    fk.name,
+                    ps.name AS from_schema,
+                    pt.name AS from_table,
+                    STRING_AGG(pc.name, ',') WITHIN GROUP (ORDER BY fkc.constraint_column_id) AS from_columns,
+                    rs.name AS to_schema,
+                    rt.name AS to_table,
+                    STRING_AGG(rc.name, ',') WITHIN GROUP (ORDER BY fkc.constraint_column_id) AS to_columns
+                FROM sys.foreign_keys fk
+                JOIN sys.foreign_key_columns fkc ON fk.object_id = fkc.constraint_object_id
+                JOIN sys.tables pt ON fkc.parent_object_id = pt.object_id
+                JOIN sys.schemas ps ON pt.schema_id = ps.schema_id
+                JOIN sys.columns pc ON fkc.parent_object_id = pc.object_id AND fkc.parent_column_id = pc.column_id
+                JOIN sys.tables rt ON fkc.referenced_object_id = rt.object_id
+                JOIN sys.schemas rs ON rt.schema_id = rs.schema_id
+                JOIN sys.columns rc ON fkc.referenced_object_id = rc.object_id AND fkc.referenced_column_id = rc.column_id
+                WHERE pt.is_ms_shipped = 0 AND rt.is_ms_shipped = 0
+                GROUP BY fk.name, ps.name, pt.name, rs.name, rt.name
+                ORDER BY ps.name, pt.name, fk.name
+                """;
+
+            var relationships = new List<DiagramRelationshipInfo>();
+            await using (var cmd = new SqlCommand(relationshipSql, connection) { CommandTimeout = DefaultCommandTimeoutSeconds })
+            await using (var reader = await cmd.ExecuteReaderAsync())
+            {
+                while (await reader.ReadAsync())
+                {
+                    relationships.Add(new DiagramRelationshipInfo
+                    {
+                        Name = reader.GetString(0),
+                        FromSchema = reader.GetString(1),
+                        FromTable = reader.GetString(2),
+                        FromColumns = reader.GetString(3).Split(',', StringSplitOptions.RemoveEmptyEntries).ToList(),
+                        ToSchema = reader.GetString(4),
+                        ToTable = reader.GetString(5),
+                        ToColumns = reader.GetString(6).Split(',', StringSplitOptions.RemoveEmptyEntries).ToList()
+                    });
+                }
+            }
+
+            return new DatabaseDiagramInfo
+            {
+                Database = database,
+                Tables = tables.Values.OrderBy(t => t.Schema).ThenBy(t => t.Name).ToList(),
+                Relationships = relationships
+            };
+        });
+    }
+
     private static async Task<ObjectScriptResult> GetTableCreateScriptAsync(SqlConnection connection, string schema, string tableName)
     {
         // Build CREATE TABLE from metadata

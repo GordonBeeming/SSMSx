@@ -1,5 +1,6 @@
 import { useQueryStore } from "../store/queryStore";
 import { onQueryResults, onQueryComplete, onQueryError } from "./queryApi";
+import { isTauriRuntime } from "../../../shared/utils/tauri";
 
 let initialized = false;
 
@@ -17,6 +18,7 @@ let initialized = false;
  */
 export async function initQueryEventListeners(): Promise<void> {
   if (initialized) return;
+  if (!isTauriRuntime()) return;
   initialized = true;
 
   try {

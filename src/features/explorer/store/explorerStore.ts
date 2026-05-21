@@ -12,6 +12,7 @@ import {
   explorerFunctions,
   explorerUsers,
 } from "../api/explorerApi";
+import { loadSavedDiagramViews } from "../../diagram/utils/savedDiagrams";
 
 interface ExplorerState {
   nodes: Record<string, ExplorerNode>;
@@ -230,6 +231,7 @@ async function fetchChildren(node: ExplorerNode): Promise<ExplorerNode[]> {
       }
       const db = node.database;
       const folders = [
+        { kind: "diagrams", label: "Diagrams" },
         { kind: "tables", label: "Tables" },
         { kind: "views", label: "Views" },
         { kind: "programmability", label: "Programmability" },
@@ -261,6 +263,26 @@ async function fetchChildren(node: ExplorerNode): Promise<ExplorerNode[]> {
       }
       const db = node.database;
       switch (node.folderKind) {
+        case "diagrams": {
+          const diagrams = loadSavedDiagramViews(connectionId, db);
+          for (const diagram of diagrams) {
+            children.push({
+              id: makeNodeId(connectionId, "db", db, "diagram", diagram.id),
+              connectionId,
+              type: "diagram",
+              name: diagram.name,
+              database: db,
+              diagramViewId: diagram.id,
+              expanded: false,
+              loading: false,
+              loaded: false,
+              children: [],
+              parentId: node.id,
+              hasChildren: false,
+            });
+          }
+          break;
+        }
         case "tables": {
           const tables = await explorerTables(connectionId, db);
           for (const t of tables) {

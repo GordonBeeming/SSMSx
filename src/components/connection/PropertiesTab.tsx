@@ -115,19 +115,21 @@ export function PropertiesTab() {
     // Save if it's a new connection, identity changed, or password updated
     const hasNewPassword = !!password;
     const needsSave = isNewConnection || hasNewPassword || !rememberPassword;
+    let connectionId = info.id;
     if (needsSave) {
       const wantsClear = !rememberPassword && !!selectedConnection?.credentialRef;
       const infoToSave = rememberPassword
         ? info
         : { ...info, credentialRef: undefined };
-      await saveConnection(
+      const saved = await saveConnection(
         infoToSave,
         rememberPassword && hasNewPassword ? password : undefined,
         wantsClear
       );
+      connectionId = saved.id;
     }
 
-    await connect(info.id);
+    await connect(connectionId);
   };
 
   const needsUsername =

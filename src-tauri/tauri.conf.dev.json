@@ -1,0 +1,33 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "SSMSX DEV",
+  "identifier": "com.ssmsx.app.dev",
+  "app": {
+    "windows": [
+      {
+        "title": "SSMSX DEV",
+        "width": 1400,
+        "height": 900,
+        "minWidth": 960,
+        "minHeight": 640,
+        "resizable": true
+      }
+    ],
+    "security": {
+      "csp": null,
+      "capabilities": [
+        {
+          "identifier": "dev-mcp",
+          "description": "Development capabilities for SSMSX MCP smoke testing",
+          "windows": ["main"],
+          "permissions": [
+            "core:default",
+            "mcp-bridge:default",
+            "shell:allow-spawn"
+          ]
+        }
+      ]
+    },
+    "withGlobalTauri": true
+  }
+}
