@@ -73,7 +73,11 @@ const nodeTypes = {
 };
 
 function tableKey(table: Pick<DiagramTableInfo, "schema" | "name">): string {
-  return `${table.schema}.${table.name}`;
+  return tableKeyFromParts(table.schema, table.name);
+}
+
+function tableKeyFromParts(schema: string, name: string): string {
+  return `${schema.length}:${schema}${name.length}:${name}`;
 }
 
 function columnHandleId(kind: "source" | "target", columnName: string): string {
@@ -237,8 +241,8 @@ function buildEndpointMap(diagram: DatabaseDiagramInfo): Map<string, Record<stri
   };
 
   for (const relationship of diagram.relationships) {
-    const sourceTable = `${relationship.fromSchema}.${relationship.fromTable}`;
-    const targetTable = `${relationship.toSchema}.${relationship.toTable}`;
+    const sourceTable = tableKeyFromParts(relationship.fromSchema, relationship.fromTable);
+    const targetTable = tableKeyFromParts(relationship.toSchema, relationship.toTable);
 
     for (const columnName of relationship.fromColumns) {
       ensureColumn(sourceTable, columnName).source = true;
@@ -293,8 +297,8 @@ function layoutGraph(
 
   const tableKeys = new Set(diagram.tables.map(tableKey));
   const edges = diagram.relationships.flatMap((relationship) => {
-    const source = `${relationship.fromSchema}.${relationship.fromTable}`;
-    const target = `${relationship.toSchema}.${relationship.toTable}`;
+    const source = tableKeyFromParts(relationship.fromSchema, relationship.fromTable);
+    const target = tableKeyFromParts(relationship.toSchema, relationship.toTable);
     if (!tableKeys.has(source) || !tableKeys.has(target)) {
       return [];
     }
@@ -365,8 +369,8 @@ function getInitialFocusNodeIds(diagram: DatabaseDiagramInfo): string[] {
   }
 
   for (const relationship of diagram.relationships) {
-    const source = `${relationship.fromSchema}.${relationship.fromTable}`;
-    const target = `${relationship.toSchema}.${relationship.toTable}`;
+    const source = tableKeyFromParts(relationship.fromSchema, relationship.fromTable);
+    const target = tableKeyFromParts(relationship.toSchema, relationship.toTable);
     degree.set(source, (degree.get(source) ?? 0) + 1);
     degree.set(target, (degree.get(target) ?? 0) + 1);
     neighbors.get(source)?.add(target);
@@ -505,8 +509,8 @@ export function DatabaseDiagramWorkspace({
       ...diagram,
       tables,
       relationships: diagram.relationships.filter((relationship) =>
-        tableKeys.has(`${relationship.fromSchema}.${relationship.fromTable}`) &&
-        tableKeys.has(`${relationship.toSchema}.${relationship.toTable}`)
+        tableKeys.has(tableKeyFromParts(relationship.fromSchema, relationship.fromTable)) &&
+        tableKeys.has(tableKeyFromParts(relationship.toSchema, relationship.toTable))
       ),
     };
   }, [diagram, selectedTableKeys]);
