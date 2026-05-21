@@ -123,8 +123,9 @@ var handlers = new Dictionary<string, Func<JsonElement?, Task<JsonElement>>>
         }
         catch (Exception ex)
         {
+            await Console.Error.WriteLineAsync($"Connection test failed: {ex}");
             return JsonSerializer.SerializeToElement(
-                new ConnectionTestResult { Success = false, Error = ex.ToString() },
+                new ConnectionTestResult { Success = false, Error = ex.Message },
                 ProtocolJsonContext.Default.ConnectionTestResult);
         }
     },

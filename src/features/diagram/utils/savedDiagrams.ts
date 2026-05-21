@@ -20,15 +20,15 @@ export function loadSavedDiagramViews(connectionId: string, database: string): S
       return [];
     }
 
-    const parsed = JSON.parse(value) as Partial<SavedDiagramView>[];
+    const parsed = JSON.parse(value) as unknown;
     if (!Array.isArray(parsed)) {
       return [];
     }
 
     return parsed
-      .filter((view) => typeof view.id === "string")
+      .filter((view): view is Partial<SavedDiagramView> => typeof view === "object" && view !== null)
       .map((view, index) => ({
-        id: view.id ?? crypto.randomUUID(),
+        id: typeof view.id === "string" && view.id.trim() ? view.id : crypto.randomUUID(),
         name: typeof view.name === "string" && view.name.trim()
           ? view.name
           : `Diagram ${index + 1}`,
@@ -48,13 +48,19 @@ export function saveDiagramViews(
   connectionId: string,
   database: string,
   views: SavedDiagramView[]
-) {
-  window.localStorage.setItem(diagramStorageKey(connectionId, database), JSON.stringify(views));
-  window.dispatchEvent(
-    new CustomEvent("diagram:views-changed", {
-      detail: { connectionId, database },
-    })
-  );
+): boolean {
+  try {
+    window.localStorage.setItem(diagramStorageKey(connectionId, database), JSON.stringify(views));
+    window.dispatchEvent(
+      new CustomEvent("diagram:views-changed", {
+        detail: { connectionId, database },
+      })
+    );
+    return true;
+  } catch (error) {
+    console.error("Failed to save diagram views", error);
+    return false;
+  }
 }
 
 export function nextDiagramName(views: SavedDiagramView[]): string {

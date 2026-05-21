@@ -33,3 +33,7 @@ input, textarea, pre, [contenteditable] {
   font-style: italic;
   opacity: 0.5;
 }
+
+.context-menu-submenu:hover > .context-menu-submenu-panel {
+  display: block;
+}
