@@ -22,6 +22,7 @@ var queryCancellationManager = new QueryCancellationManager();
 var queryExecutor = new QueryExecutor(connectionManager, queryCancellationManager);
 var intelliSenseService = new IntelliSenseService(connectionManager);
 var requestCancellation = new ConcurrentDictionary<string, CancellationTokenSource>();
+var cancelledRequestIds = new ConcurrentDictionary<string, byte>();
 
 await using var stdout = Console.OpenStandardOutput();
 using var writer = new StreamWriter(stdout) { AutoFlush = true };
@@ -292,6 +293,11 @@ var stdinReader = new Thread(() =>
                             cancelled = false;
                         }
                     }
+                    else
+                    {
+                        cancelledRequestIds[cancelArgs.RequestId] = 0;
+                        cancelled = true;
+                    }
                     SendResult(peek.Id, JsonSerializer.SerializeToElement(cancelled, ProtocolJsonContext.Default.Boolean));
                 }
                 catch (Exception ex)
@@ -360,6 +366,10 @@ foreach (var requestLine in requestQueue.GetConsumingEnumerable())
         {
             var cts = new CancellationTokenSource();
             requestCancellation[request.Id] = cts;
+            if (cancelledRequestIds.TryRemove(request.Id, out _))
+            {
+                cts.Cancel();
+            }
             _ = Task.Run(() => HandleCancellableRequest(request, cancellableHandler, cts));
             continue;
         }
@@ -445,6 +455,7 @@ async Task HandleCancellableRequest(
     finally
     {
         requestCancellation.TryRemove(request.Id, out _);
+        cancelledRequestIds.TryRemove(request.Id, out _);
         cts.Dispose();
     }
 }

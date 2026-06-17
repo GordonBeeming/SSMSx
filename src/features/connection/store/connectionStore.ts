@@ -10,6 +10,7 @@ import {
   connectionDisconnect,
 } from "../api/connectionApi";
 import { useExplorerStore } from "../../explorer";
+import { CONNECTION_CANCELLED_MESSAGE } from "../utils/connectionResult";
 
 export type DialogTab = "properties" | "connectionString" | "custom";
 export type ConnectionOperation = "test" | "connect" | null;
@@ -147,7 +148,7 @@ export const useConnectionStore = create<ConnectionState>((set, get) => ({
     try {
       const result = await connectionTest(info, password, requestId);
       if (get().activeRequestId !== requestId) {
-        return { success: false, error: "Connection attempt cancelled." };
+        return { success: false, error: CONNECTION_CANCELLED_MESSAGE };
       }
       set({ testResult: result });
       return result;
@@ -208,7 +209,7 @@ export const useConnectionStore = create<ConnectionState>((set, get) => ({
       loading: false,
       activeOperation: null,
       activeRequestId: null,
-      testResult: { success: false, error: "Connection attempt cancelled." },
+      testResult: { success: false, error: CONNECTION_CANCELLED_MESSAGE },
     });
 
     try {

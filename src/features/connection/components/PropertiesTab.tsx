@@ -2,6 +2,10 @@ import { useState, useEffect } from "react";
 import type { ConnectionInfo } from "../types";
 import { isAuthType, isEncryptMode } from "../types";
 import { useConnectionStore } from "../store/connectionStore";
+import {
+  CONNECTION_CANCELLED_MESSAGE,
+  isConnectionCancellation,
+} from "../utils/connectionResult";
 
 const DEFAULT_CONNECTION: Omit<ConnectionInfo, "id" | "createdAt"> = {
   name: "",
@@ -35,6 +39,10 @@ export function PropertiesTab() {
   const [isDirtyIdentity, setIsDirtyIdentity] = useState(false);
 
   const hasStoredPassword = !!form.credentialRef;
+  const isCancelled =
+    !!testResult &&
+    !testResult.success &&
+    isConnectionCancellation(testResult.error);
 
   useEffect(() => {
     if (selectedConnection) {
@@ -293,11 +301,15 @@ export function PropertiesTab() {
             className={`mb-3 rounded px-3 py-2 text-sm ${
               testResult.success
                 ? "bg-success/10 text-success"
+                : isCancelled
+                  ? "bg-warning/10 text-warning"
                 : "bg-error/10 text-error"
             }`}
           >
             {testResult.success
               ? "Connection successful!"
+              : isCancelled
+                ? CONNECTION_CANCELLED_MESSAGE
               : `Connection failed: ${testResult.error}`}
           </div>
         )}
