@@ -1,8 +1,8 @@
-mod sidecar;
 mod commands;
+mod sidecar;
 
-use tauri::{Manager, Emitter};
-use tauri::menu::{MenuBuilder, SubmenuBuilder, MenuItemBuilder, PredefinedMenuItem};
+use tauri::menu::{MenuBuilder, MenuItemBuilder, PredefinedMenuItem, SubmenuBuilder};
+use tauri::{Emitter, Manager};
 
 pub fn run() {
     let _ = env_logger::try_init();
@@ -61,6 +61,7 @@ pub fn run() {
             commands::connection::connection_delete,
             commands::connection::connection_test,
             commands::connection::connection_connect,
+            commands::connection::connection_cancel_request,
             commands::connection::connection_disconnect,
             commands::explorer::explorer_databases,
             commands::explorer::explorer_tables,
@@ -84,20 +85,37 @@ pub fn run() {
 fn build_menu(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     let handle = app.handle();
 
-    // -- File menu --
-    let file_menu = SubmenuBuilder::new(handle, "File")
-        .item(&MenuItemBuilder::with_id("new-connection", "New Connection...")
-            .accelerator("CmdOrCtrl+Shift+N")
-            .build(handle)?)
-        .item(&MenuItemBuilder::with_id("new-query", "New Query")
-            .accelerator("CmdOrCtrl+N")
-            .build(handle)?)
+    // -- App menu --
+    let app_menu = SubmenuBuilder::new(handle, "SSMSx")
+        .item(
+            &MenuItemBuilder::with_id("show-settings", "Settings...")
+                .accelerator("CmdOrCtrl+,")
+                .build(handle)?,
+        )
         .separator()
-        .item(&MenuItemBuilder::with_id("close-tab", "Close Tab")
-            .accelerator("CmdOrCtrl+W")
-            .build(handle)?)
+        .item(&MenuItemBuilder::with_id("show-about", "About SSMSx").build(handle)?)
         .separator()
         .item(&PredefinedMenuItem::quit(handle, None)?)
+        .build()?;
+
+    // -- File menu --
+    let file_menu = SubmenuBuilder::new(handle, "File")
+        .item(
+            &MenuItemBuilder::with_id("new-connection", "New Connection...")
+                .accelerator("CmdOrCtrl+Shift+N")
+                .build(handle)?,
+        )
+        .item(
+            &MenuItemBuilder::with_id("new-query", "New Query")
+                .accelerator("CmdOrCtrl+N")
+                .build(handle)?,
+        )
+        .separator()
+        .item(
+            &MenuItemBuilder::with_id("close-tab", "Close Tab")
+                .accelerator("CmdOrCtrl+W")
+                .build(handle)?,
+        )
         .build()?;
 
     // -- Edit menu (standard) --
@@ -113,24 +131,27 @@ fn build_menu(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
 
     // -- Query menu --
     let query_menu = SubmenuBuilder::new(handle, "Query")
-        .item(&MenuItemBuilder::with_id("execute-query", "Execute")
-            .accelerator("F5")
-            .build(handle)?)
-        .item(&MenuItemBuilder::with_id("execute-selection", "Execute Selection")
-            .accelerator("CmdOrCtrl+Shift+E")
-            .build(handle)?)
+        .item(
+            &MenuItemBuilder::with_id("execute-query", "Execute")
+                .accelerator("F5")
+                .build(handle)?,
+        )
+        .item(
+            &MenuItemBuilder::with_id("execute-selection", "Execute Selection")
+                .accelerator("CmdOrCtrl+Shift+E")
+                .build(handle)?,
+        )
         .separator()
-        .item(&MenuItemBuilder::with_id("cancel-query", "Cancel Execution")
-            .build(handle)?)
+        .item(&MenuItemBuilder::with_id("cancel-query", "Cancel Execution").build(handle)?)
         .build()?;
 
     // -- View menu --
     let view_menu = SubmenuBuilder::new(handle, "View")
-        .item(&MenuItemBuilder::with_id("toggle-explorer", "Object Explorer")
-            .build(handle)?)
+        .item(&MenuItemBuilder::with_id("toggle-explorer", "Object Explorer").build(handle)?)
         .build()?;
 
     let menu = MenuBuilder::new(handle)
+        .item(&app_menu)
         .item(&file_menu)
         .item(&edit_menu)
         .item(&query_menu)

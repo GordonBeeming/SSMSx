@@ -1,0 +1,27 @@
+<!-- @dsCard group="Colors" viewport="700x150" name="Accent & status" subtitle="Brand blue plus run / error / warning / online states" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<link rel="stylesheet" href="../styles.css" />
+<style>
+  body { margin: 0; font-family: var(--font-ui); background: #fff; padding: 18px; }
+  .row { display: flex; gap: 10px; }
+  .sw { flex: 1; border: 1px solid var(--border-default); border-radius: var(--radius-sm); overflow: hidden; }
+  .chip { height: 56px; }
+  .meta { padding: 6px 8px; font-size: 10px; line-height: 1.5; }
+  .name { color: var(--text-primary); font-weight: 600; }
+  .hex { color: var(--text-secondary); font-family: var(--font-mono); text-transform: uppercase; }
+</style>
+</head>
+<body>
+  <div class="row">
+    <div class="sw"><div class="chip" style="background:var(--accent)"></div><div class="meta"><div class="name">accent</div><div class="hex">#0063B2</div></div></div>
+    <div class="sw"><div class="chip" style="background:var(--accent-hover)"></div><div class="meta"><div class="name">accent hover</div><div class="hex">#0075A3</div></div></div>
+    <div class="sw"><div class="chip" style="background:var(--status-success)"></div><div class="meta"><div class="name">success</div><div class="hex">#16A34A</div></div></div>
+    <div class="sw"><div class="chip" style="background:var(--status-error)"></div><div class="meta"><div class="name">error</div><div class="hex">#DC2626</div></div></div>
+    <div class="sw"><div class="chip" style="background:var(--status-warning)"></div><div class="meta"><div class="name">warning</div><div class="hex">#B45309</div></div></div>
+    <div class="sw"><div class="chip" style="background:var(--status-online)"></div><div class="meta"><div class="name">online</div><div class="hex">#4ADE80</div></div></div>
+  </div>
+</body>
+</html>

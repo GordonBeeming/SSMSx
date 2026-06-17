@@ -80,6 +80,10 @@ const TABLE_CONTEXT_KEYWORDS = /\b(FROM|JOIN|INTO|UPDATE|TABLE|INNER\s+JOIN|LEFT
 /** Context keywords that suggest column completions follow */
 const COLUMN_CONTEXT_KEYWORDS = /\b(SELECT|WHERE|ON|SET|BY|HAVING|AND|OR)\s+$/i;
 
+/** Clause starters where a partially typed token should still suggest columns. */
+const COLUMN_CONTEXT_CLAUSE_KEYWORDS =
+  /\b(SELECT|WHERE|ON|SET|ORDER\s+BY|GROUP\s+BY|HAVING|AND|OR)\b/i;
+
 /** Context keywords that suggest procedure completions follow */
 const PROC_CONTEXT_KEYWORDS = /\b(EXEC|EXECUTE)\s+$/i;
 
@@ -134,7 +138,9 @@ export class SqlCompletionProvider
     );
 
     const isTableContext = TABLE_CONTEXT_KEYWORDS.test(textBefore);
-    const isColumnContext = COLUMN_CONTEXT_KEYWORDS.test(textBefore);
+    const isColumnContext =
+      COLUMN_CONTEXT_KEYWORDS.test(textBefore) ||
+      isColumnClauseContext(textBefore, word.word);
     const isProcContext = PROC_CONTEXT_KEYWORDS.test(textBefore);
 
     // After a dot — could be schema.table or table.column
@@ -364,6 +370,38 @@ function extractTableName(ref: string): string | null {
 
   if (parts.length === 0) return null;
   return parts[parts.length - 1];
+}
+
+/**
+ * Monaco removes the currently typed word from `textBefore`. That means
+ * `WHERE F|` becomes `WHERE ` + word `F`, but more complex expressions can
+ * leave text after the clause keyword. Treat those locations as column context
+ * until the user has clearly moved into another table/procedure clause.
+ */
+function isColumnClauseContext(textBefore: string, currentWord: string): boolean {
+  if (!currentWord) return false;
+
+  const text = textBefore.trimEnd();
+  if (!COLUMN_CONTEXT_CLAUSE_KEYWORDS.test(text)) return false;
+
+  const lastColumnClause = findLastMatchIndex(text, COLUMN_CONTEXT_CLAUSE_KEYWORDS);
+  const lastTableClause = findLastMatchIndex(
+    text,
+    /\b(FROM|JOIN|INTO|UPDATE|EXEC|EXECUTE)\b/i
+  );
+
+  return lastColumnClause > lastTableClause;
+}
+
+function findLastMatchIndex(text: string, pattern: RegExp): number {
+  const flags = pattern.flags.includes("g") ? pattern.flags : `${pattern.flags}g`;
+  const globalPattern = new RegExp(pattern.source, flags);
+  let lastIndex = -1;
+  let match: RegExpExecArray | null;
+  while ((match = globalPattern.exec(text)) !== null) {
+    lastIndex = match.index;
+  }
+  return lastIndex;
 }
 
 interface DedupedColumn {

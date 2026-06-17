@@ -1,8 +1,8 @@
-# SSMSX Specification
+# SSMSx Specification
 
 ## Why
 
-SSMS is Windows-only, Azure Data Studio is nearing end-of-life, and neither feels fast. SSMSX is a cross-platform SQL Server management tool built for speed.
+SSMS is Windows-only, Azure Data Studio is nearing end-of-life, and neither feels fast. SSMSx is a cross-platform SQL Server management tool built for speed.
 
 ## Architecture
 
@@ -17,7 +17,7 @@ React (invoke) → Tauri Command (Rust) → stdio JSON → C# Sidecar → SQL Se
 - Communication is newline-delimited JSON over stdio with correlation IDs and batched streaming for large result sets
 - React frontend uses Monaco Editor, Zustand state, and TanStack virtualized tables
 
-See [README.md](../README.md) for the full architecture diagram and tech stack.
+See [README.md](../README.md) for product positioning and [DEVELOPMENT.md](DEVELOPMENT.md) for the development runbook.
 
 ## Architecture: Vertical Slice Architecture (VSA)
 

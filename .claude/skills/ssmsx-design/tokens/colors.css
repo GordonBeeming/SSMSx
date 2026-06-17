@@ -1,0 +1,63 @@
+/* SSMSX — Color tokens
+   Mirrors the app's Tailwind v4 @theme (src/index.css). Light, utilitarian,
+   high-contrast surfaces for a dense developer database tool. */
+
+:root {
+  /* ---- Base palette (raw values) ---- */
+  --gray-50:  #F8F9FA;  /* app background */
+  --gray-100: #E9ECEF;  /* panels, toolbars */
+  --gray-200: #DEE2E6;  /* borders, dividers, hover fills */
+  --white:    #ffffff;  /* inputs, active tab */
+  --ink-900:  #1A1A1A;  /* primary text */
+  --ink-600:  #374151;  /* secondary text */
+
+  --blue-600: #0063B2;  /* accent — primary actions, focus, selection */
+  --blue-500: #0075A3;  /* accent hover */
+
+  --red-600:   #dc2626; /* error / destructive */
+  --green-600: #16a34a; /* success / run */
+  --amber-700: #b45309; /* warning / cancelled */
+  --green-400: #4ade80; /* server-online status dot (in object explorer) */
+
+  /* ---- Surfaces ---- */
+  --surface-app:      var(--gray-50);
+  --surface-panel:    var(--gray-100);
+  --surface-raised:   var(--gray-200);
+  --surface-input:    var(--white);
+  --surface-overlay:  var(--gray-100);   /* context menus, popovers */
+
+  /* ---- Text ---- */
+  --text-primary:   var(--ink-900);
+  --text-secondary: var(--ink-600);
+  --text-on-accent: var(--white);
+
+  /* ---- Lines ---- */
+  --border-default: var(--gray-200);
+  --border-strong:  var(--ink-600);
+
+  /* ---- Accent / interactive ---- */
+  --accent:        var(--blue-600);
+  --accent-hover:  var(--blue-500);
+  --accent-text:   var(--white);
+  /* selection tint = accent @ 15% (matches bg-accent/15 in the tree) */
+  --accent-selected: color-mix(in srgb, var(--blue-600) 15%, transparent);
+
+  /* ---- Semantic status ---- */
+  --status-error:   var(--red-600);
+  --status-success: var(--green-600);
+  --status-warning: var(--amber-700);
+  --status-online:  var(--green-400);
+
+  /* soft status fills (e.g. error bar bg = error/10) */
+  --status-error-soft: color-mix(in srgb, var(--red-600) 10%, transparent);
+
+  /* ---- Connection color-coding swatches ----
+     Users tag each saved connection with a color (a dot shown in the toolbar,
+     tabs, status bar and tree). These are sensible defaults. */
+  --conn-blue:   #0063B2;
+  --conn-green:  #16a34a;
+  --conn-amber:  #d97706;
+  --conn-red:    #dc2626;
+  --conn-violet: #7c3aed;
+  --conn-slate:  #555555;
+}

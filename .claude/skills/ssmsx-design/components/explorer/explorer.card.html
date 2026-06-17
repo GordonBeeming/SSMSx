@@ -1,0 +1,55 @@
+<!-- @dsCard group="Components" viewport="700x280" name="Object Explorer tree" subtitle="Node icons + tree rows for every SQL object type" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<link rel="stylesheet" href="../../styles.css" />
+<style>
+  body { margin: 0; font-family: var(--font-ui); background: var(--surface-panel); padding: 20px; }
+  .wrap { display: flex; gap: 24px; }
+  .tree { width: 300px; background: var(--surface-app); border: 1px solid var(--border-default); border-radius: var(--radius-md); padding: 4px 0; }
+  .icons { flex: 1; display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px 8px; align-content: start; }
+  .icell { display: flex; flex-direction: column; align-items: center; gap: 4px; color: var(--text-secondary); font-size: 10px; }
+  .icell .g { color: var(--accent); }
+</style>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="../../_ds_bundle.js"></script>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+  const { NodeIcon, TreeRow } = window.SSMSXDesignSystem_453330;
+  const TYPES = ["server","database","folder","table","view","column","key","index","procedure","function","user","diagram"];
+  function Demo() {
+    return (
+      <div className="wrap">
+        <div className="tree">
+          <TreeRow type="server" label="sql-prod-01" depth={0} hasChildren expanded color="var(--conn-red)" />
+          <TreeRow type="database" label="Sales" depth={1} hasChildren expanded />
+          <TreeRow type="folder" label="Tables" depth={2} hasChildren expanded />
+          <TreeRow type="table" label="dbo.Customer" depth={3} hasChildren selected />
+          <TreeRow type="column" label="CustomerId  int" depth={4} />
+          <TreeRow type="key" label="PK_Customer" depth={4} />
+          <TreeRow type="index" label="IX_Customer_Name" depth={4} />
+          <TreeRow type="table" label="dbo.Orders" depth={3} hasChildren />
+          <TreeRow type="folder" label="Views" depth={2} hasChildren />
+          <TreeRow type="folder" label="Programmability" depth={2} hasChildren loading />
+          <TreeRow type="procedure" label="usp_GetOrders" depth={3} />
+        </div>
+        <div className="icons">
+          {TYPES.map((t) => (
+            <div className="icell" key={t}>
+              <span className="g"><NodeIcon type={t} size={18} /></span>
+              {t}
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+  ReactDOM.createRoot(document.getElementById("root")).render(<Demo/>);
+</script>
+</body>
+</html>

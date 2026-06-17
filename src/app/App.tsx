@@ -1,10 +1,13 @@
-import { useEffect, useCallback } from "react";
+import { useEffect, useCallback, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
+import { Info } from "lucide-react";
 import { useConnectionStore, ConnectionDialog } from "../features/connection";
 import { useQueryStore, QueryPanel, QueryTabBar } from "../features/query";
 import { ObjectExplorerTree } from "../features/explorer";
 import { DatabaseDiagramWorkspace } from "../features/diagram";
+import { SettingsDialog } from "../features/settings";
 import { isTauriRuntime } from "../shared/utils/tauri";
+import { AboutDialog } from "./AboutDialog";
 
 let tabCounter = 0;
 
@@ -27,6 +30,8 @@ function App() {
 
   const { tabs, activeTabId, addTab, updateTab } = useQueryStore();
   const activeTab = tabs.find((t) => t.id === activeTabId);
+  const [aboutOpen, setAboutOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   const createNewTab = useCallback(() => {
     // Use the first active connection as default
@@ -132,6 +137,20 @@ function App() {
           }
         })
       );
+
+      // SSMSx > Settings
+      unlisteners.push(
+        await listen("menu:show-settings", () => {
+          setSettingsOpen(true);
+        })
+      );
+
+      // SSMSx > About SSMSx
+      unlisteners.push(
+        await listen("menu:show-about", () => {
+          setAboutOpen(true);
+        })
+      );
     };
 
     setup().catch((e) =>
@@ -156,6 +175,11 @@ function App() {
           store.executeQuery(store.activeTabId);
         }
       }
+
+      if ((e.metaKey || e.ctrlKey) && e.key === ",") {
+        e.preventDefault();
+        setSettingsOpen(true);
+      }
     };
 
     window.addEventListener("keydown", handler);
@@ -168,7 +192,7 @@ function App() {
     <div className="flex h-screen flex-col">
       {/* Toolbar */}
       <div className="flex items-center gap-3 border-b border-bg-tertiary bg-bg-secondary px-4 py-2">
-        <h1 className="text-sm font-bold tracking-wide">SSMSX</h1>
+        <h1 className="text-sm font-bold tracking-wide">SSMSx</h1>
         <div className="flex-1" />
 
         {activeConnections.length > 0 && (
@@ -198,6 +222,16 @@ function App() {
         {!hasConnections && (
           <span className="text-xs text-text-secondary">Not connected</span>
         )}
+
+        <button
+          type="button"
+          onClick={() => setAboutOpen(true)}
+          className="rounded p-1 text-text-secondary hover:bg-bg-tertiary hover:text-text-primary"
+          title="About SSMSx"
+          aria-label="About SSMSx"
+        >
+          <Info size={16} />
+        </button>
 
         <button
           onClick={openDialog}
@@ -253,6 +287,11 @@ function App() {
       </div>
 
       <ConnectionDialog />
+      <SettingsDialog
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+      />
+      <AboutDialog open={aboutOpen} onClose={() => setAboutOpen(false)} />
     </div>
   );
 }

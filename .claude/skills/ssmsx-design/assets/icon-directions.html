@@ -1,0 +1,117 @@
+<!-- @dsCard group="Brand" viewport="700x460" name="App icon — directions" subtitle="Four directions for the SSMSX app mark — pick one" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<link rel="stylesheet" href="../styles.css" />
+<style>
+  :root { --bg: var(--surface-app); }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; font-family: var(--font-ui); color: var(--text-primary);
+    background: var(--surface-app);
+    padding: 28px 28px 36px;
+  }
+  .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 22px; }
+  .col { display: flex; flex-direction: column; align-items: center; gap: 14px; }
+  .hero { width: 112px; height: 112px; border-radius: 25px; box-shadow: var(--shadow-md); }
+  .sizes { display: flex; align-items: flex-end; gap: 12px; }
+  .sizes svg { border-radius: 22%; display: block; }
+  .label { font-size: var(--text-sm); font-weight: var(--weight-semibold); letter-spacing: var(--tracking-wide); }
+  .sub { font-size: var(--text-2xs); color: var(--text-secondary); text-align: center; line-height: 1.45; max-width: 150px; }
+  .rec { display: inline-block; margin-top: 6px; font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); border: 1px solid var(--accent); border-radius: var(--radius-full); padding: 2px 9px; }
+  .darkstrip { margin-top: 30px; background: #15171a; border-radius: var(--radius-md); padding: 22px 26px; display: flex; align-items: center; gap: 26px; }
+  .darkstrip svg { border-radius: 22%; }
+  .darkstrip .cap { color: #aeb4bd; font-size: var(--text-2xs); letter-spacing: var(--tracking-wider); text-transform: uppercase; }
+</style>
+</head>
+<body>
+  <!-- shared defs -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+    <!-- A: database cylinder -->
+    <symbol id="ic-a" viewBox="0 0 512 512">
+      <rect width="512" height="512" rx="112" fill="#0063B2"/>
+      <ellipse cx="256" cy="172" rx="104" ry="36" fill="#fff"/>
+      <path d="M152 172 V340 A104 36 0 0 0 360 340 V172" fill="#fff"/>
+      <path d="M152 228 A104 36 0 0 0 360 228" fill="none" stroke="#0063B2" stroke-width="11" opacity=".9"/>
+      <path d="M152 284 A104 36 0 0 0 360 284" fill="none" stroke="#0063B2" stroke-width="11" opacity=".9"/>
+    </symbol>
+    <!-- B: bold X -->
+    <symbol id="ic-b" viewBox="0 0 512 512">
+      <rect width="512" height="512" rx="112" fill="#0063B2"/>
+      <g stroke="#fff" stroke-width="62" stroke-linecap="round">
+        <line x1="176" y1="168" x2="336" y2="344"/>
+        <line x1="336" y1="168" x2="176" y2="344"/>
+      </g>
+    </symbol>
+    <!-- C: data stack (server language) -->
+    <symbol id="ic-c" viewBox="0 0 512 512">
+      <rect width="512" height="512" rx="112" fill="#0063B2"/>
+      <rect x="138" y="150" width="236" height="66" rx="18" fill="#fff" opacity=".96"/>
+      <rect x="138" y="223" width="236" height="66" rx="18" fill="#fff" opacity=".80"/>
+      <rect x="138" y="296" width="236" height="66" rx="18" fill="#fff" opacity=".62"/>
+      <circle cx="338" cy="183" r="10" fill="#4ade80"/>
+      <circle cx="338" cy="256" r="10" fill="#4ade80"/>
+    </symbol>
+    <!-- D: cylinder + speed bolt -->
+    <symbol id="ic-d" viewBox="0 0 512 512">
+      <rect width="512" height="512" rx="112" fill="#0063B2"/>
+      <ellipse cx="256" cy="170" rx="104" ry="36" fill="#fff"/>
+      <path d="M152 170 V342 A104 36 0 0 0 360 342 V170" fill="#fff"/>
+      <path d="M270 196 L196 300 H250 L238 380 L322 262 H262 Z" fill="#0063B2"/>
+    </symbol>
+  </defs></svg>
+
+  <div class="grid">
+    <div class="col">
+      <svg class="hero" viewBox="0 0 512 512"><use href="#ic-a"/></svg>
+      <div class="sizes">
+        <svg width="48" height="48" viewBox="0 0 512 512"><use href="#ic-a"/></svg>
+        <svg width="32" height="32" viewBox="0 0 512 512"><use href="#ic-a"/></svg>
+        <svg width="16" height="16" viewBox="0 0 512 512"><use href="#ic-a"/></svg>
+      </div>
+      <div class="label">A · Cylinder</div>
+      <div class="sub">The universal database mark. Instantly legible, safest read.</div>
+    </div>
+    <div class="col">
+      <svg class="hero" viewBox="0 0 512 512"><use href="#ic-b"/></svg>
+      <div class="sizes">
+        <svg width="48" height="48" viewBox="0 0 512 512"><use href="#ic-b"/></svg>
+        <svg width="32" height="32" viewBox="0 0 512 512"><use href="#ic-b"/></svg>
+        <svg width="16" height="16" viewBox="0 0 512 512"><use href="#ic-b"/></svg>
+      </div>
+      <div class="label">B · The X</div>
+      <div class="sub">Bold monogram for the “X”. Most distinctive at tiny sizes.</div>
+    </div>
+    <div class="col">
+      <svg class="hero" viewBox="0 0 512 512"><use href="#ic-c"/></svg>
+      <div class="sizes">
+        <svg width="48" height="48" viewBox="0 0 512 512"><use href="#ic-c"/></svg>
+        <svg width="32" height="32" viewBox="0 0 512 512"><use href="#ic-c"/></svg>
+        <svg width="16" height="16" viewBox="0 0 512 512"><use href="#ic-c"/></svg>
+      </div>
+      <div class="label">C · Data stack</div>
+      <div class="sub">Built from SSMSX’s own server glyph — stacked bars + online dots.</div>
+      <span class="rec">Recommended</span>
+    </div>
+    <div class="col">
+      <svg class="hero" viewBox="0 0 512 512"><use href="#ic-d"/></svg>
+      <div class="sizes">
+        <svg width="48" height="48" viewBox="0 0 512 512"><use href="#ic-d"/></svg>
+        <svg width="32" height="32" viewBox="0 0 512 512"><use href="#ic-d"/></svg>
+        <svg width="16" height="16" viewBox="0 0 512 512"><use href="#ic-d"/></svg>
+      </div>
+      <div class="label">D · Fast DB</div>
+      <div class="sub">Cylinder with a speed bolt — leans into “tired of waiting”.</div>
+    </div>
+  </div>
+
+  <div class="darkstrip">
+    <span class="cap">On&nbsp;dark</span>
+    <svg width="44" height="44" viewBox="0 0 512 512"><use href="#ic-a"/></svg>
+    <svg width="44" height="44" viewBox="0 0 512 512"><use href="#ic-b"/></svg>
+    <svg width="44" height="44" viewBox="0 0 512 512"><use href="#ic-c"/></svg>
+    <svg width="44" height="44" viewBox="0 0 512 512"><use href="#ic-d"/></svg>
+  </div>
+</body>
+</html>

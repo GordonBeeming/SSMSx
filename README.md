@@ -1,95 +1,61 @@
-# SSMSX
+# SSMSx
 
-A fast, cross-platform SQL Server Management Studio built for developers who are tired of waiting.
+![SSMSx logo](public/logo-lockup.svg)
 
-SSMS is Windows-only. Azure Data Studio is nearing end-of-life. Neither feels fast. SSMSX fixes all three problems.
+**A fast, cross-platform SQL Server Management Studio for developers who are tired of waiting.**
 
-## Architecture
+SSMS is Windows-only. Azure Data Studio is nearing end-of-life. Neither feels fast. SSMSx is a modern desktop SQL Server client built around speed, dense information display, and native-feeling workflows.
 
-```
-┌──────────────────────────────────────────────────────┐
-│                   Tauri v2 Shell                      │
-│  ┌────────────┐    ┌───────────────────┐             │
-│  │ Rust Core  │◄──►│  React Frontend   │             │
-│  │ (Tauri IPC │ cmd│  (Monaco, Zustand, │             │
-│  │  commands) │    │   TanStack Table) │             │
-│  └─────┬──────┘    └───────────────────┘             │
-│        │ stdio/JSON                                   │
-│  ┌─────▼──────────────────┐                          │
-│  │  C# AOT Sidecar        │                          │
-│  │  (SqlClient, MSAL,     │                          │
-│  │   schema discovery)    │                          │
-│  └────────────────────────┘                          │
-│  Native OS WebView (WebView2/WKWebView/WebKitGTK)   │
-└──────────────────────────────────────────────────────┘
-```
+## Why SSMSx
 
-- **Tauri v2 (Rust)** — native OS webview shell, tiny footprint, proven architecture (same as GitButler)
-- **React + TypeScript** — Monaco Editor for SQL, Zustand for state, TanStack for virtualized results
-- **C# Native AOT sidecar** — Microsoft.Data.SqlClient for SQL Server, MSAL for Entra MFA auth
+- **Cross-platform by design:** macOS, Windows, and Linux through Tauri.
+- **Fast startup and low overhead:** native shell, React UI, and a focused C# sidecar instead of a heavyweight IDE runtime.
+- **Real SQL Server connectivity:** `Microsoft.Data.SqlClient` and MSAL/Entra support where it belongs.
+- **Developer-first query workflow:** Monaco editor, tabs, IntelliSense, execution shortcuts, result-set tabs, messages, and clipboard-friendly grids.
+- **Useful database navigation:** lazy Object Explorer for databases, tables, views, procedures, functions, columns, keys, indexes, users, and diagrams.
+- **Quiet, dense UI:** light theme, cool grays, one blue accent, 1px borders, and no decorative chrome fighting the data.
 
-The Rust layer handles the window and IPC. The C# sidecar handles everything SQL Server. They communicate via newline-delimited JSON over stdio. The React frontend talks to Rust via Tauri commands.
+## What Works Today
 
-## MVP Features
+SSMSx already has the core workbench in place:
 
-- **Connection Management** — SQL Server Auth, connection strings, Microsoft Entra MFA with saved/recent connections and color coding
-- **Object Explorer** — lazy-loaded database tree (databases, tables, views, stored procedures, functions, columns, keys, indexes)
-- **Query Editor** — Monaco-powered SQL editor with tabs, IntelliSense, keyboard shortcuts (F5 execute, Ctrl+Shift+E execute selection)
-- **Results Viewer** — virtualized grid handling 100K+ rows, messages tab, CSV export, clipboard copy
+- Saved/recent connections with color-coded connection dots.
+- SQL editor tabs with F5 execution and selection execution.
+- Query results with selectable cells, keyboard navigation, and copy all with or without headers.
+- Resizable Object Explorer with remembered width.
+- Results split that opens at 50% and can be dragged per session.
+- Database diagrams with saved views, auto layout, SQL output, and EF Core split configuration output.
+- Native Tauri packaging, app icon, release workflow, and Homebrew tap automation.
 
-## Performance Targets
+## Built With
 
-| Metric | Target |
-|--------|--------|
-| Startup to window visible | < 300ms |
-| Sidecar ready | < 500ms |
-| Connection establishment | < 2s |
-| First result row | < 100ms |
-| Object Explorer node expansion | < 300ms |
-
-## Tech Stack
-
-| Layer | Technology |
-|-------|-----------|
-| Shell | Tauri v2 (Rust) |
-| Frontend | React 19, TypeScript, Vite, Tailwind CSS |
-| SQL Editor | Monaco Editor |
-| Results Grid | TanStack Table + TanStack Virtual |
-| State | Zustand |
-| Sidecar | C# .NET 9, Native AOT |
-| SQL Driver | Microsoft.Data.SqlClient 6.x |
-| Auth | MSAL (Microsoft.Identity.Client) |
-| Credentials | OS Keychain (macOS/Windows/Linux) |
-
-## Project Structure
-
-```
-ssmsx/
-├── src-tauri/              # Tauri v2 Rust app (shell, IPC, sidecar management)
-├── src/                    # React + TypeScript frontend
-├── sidecar/                # C# Native AOT sidecar (SQL operations, auth)
-├── build/                  # Cross-platform build scripts
-└── docs/
-    └── SPEC.md             # High-level spec and milestone plan
+```text
+Tauri v2 shell
+React 19 + TypeScript frontend
+C# .NET sidecar for SQL Server operations
+Microsoft.Data.SqlClient + MSAL
+Monaco Editor
+Zustand
+Tailwind CSS v4
+React Flow + Dagre
 ```
 
-## Prerequisites
+## App Identity
 
-- [Rust](https://rustup.rs/) (latest stable)
-- [Node.js](https://nodejs.org/) 20+
-- [.NET 9 SDK](https://dotnet.microsoft.com/download)
-- Platform-specific Tauri dependencies — see [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/)
+The product name is **SSMSx**: uppercase SSMS, lowercase trailing x. The repository slug and package names stay lowercase as `ssmsx`.
+
+The app icon is the SSMSx data-stack mark: three white server bars on accent blue with green online dots.
 
 ## Development
 
-```bash
-# Coming soon — see docs/SPEC.md for the roadmap
-```
+Developer setup, local commands, architecture notes, and release mechanics live in [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
 
-## Roadmap
+The broader product and implementation specification is in [docs/SPEC.md](docs/SPEC.md).
 
-See [docs/SPEC.md](docs/SPEC.md) for the full specification and milestone plan. Issues are tracked on [GitHub Issues](https://github.com/GordonBeeming/ssmsx/issues) with milestones matching the spec.
+## Releases
+
+Published GitHub releases trigger the macOS signing, notarization, DMG creation, and Homebrew cask update workflow. The release helper skill lives at `.claude/skills/create-release` and is symlinked into `.agents/skills/create-release`.
 
 ## License
 
-[FSL-1.1-MIT](LICENSE) — Functional Source License, Version 1.1, with MIT Future License
+[FSL-1.1-MIT](LICENSE): Functional Source License, Version 1.1, with MIT Future License.

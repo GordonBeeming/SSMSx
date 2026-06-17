@@ -175,7 +175,7 @@ export function ConnectionList() {
           filtered.map((c) => (
             <div
               key={c.id}
-              className={`group flex cursor-pointer items-center gap-2 rounded px-3 py-2 hover:bg-bg-tertiary ${
+              className={`group grid cursor-pointer grid-cols-[12px_minmax(0,1fr)_auto] items-start gap-2 rounded px-3 py-2 hover:bg-bg-tertiary ${
                 selectedConnection?.id === c.id ? "bg-bg-tertiary" : ""
               }`}
               onClick={() => handleClick(c)}
@@ -186,33 +186,35 @@ export function ConnectionList() {
                 className="h-3 w-3 shrink-0 rounded-full"
                 style={{ backgroundColor: c.color || "#555" }}
               />
-              <div className="min-w-0 flex-1">
-                <div className="truncate text-sm font-medium text-text-primary">
+              <div className="min-w-0">
+                <div className="break-words text-sm font-medium leading-4 text-text-primary [overflow-wrap:anywhere]">
                   {c.name || c.serverName}
                 </div>
-                <div className="truncate text-xs text-text-secondary">
+                <div className="mt-0.5 break-words text-xs leading-4 text-text-secondary [overflow-wrap:anywhere]">
                   {c.serverName}
                   {c.database ? ` / ${c.database}` : ""}
                   {c.username ? ` — ${c.username}` : ""}
                 </div>
               </div>
-              <span className="shrink-0 rounded bg-bg-tertiary px-1.5 py-0.5 text-xs text-text-secondary">
-                {AUTH_TYPE_LABELS[c.authType] || c.authType}
-              </span>
-              <button
-                type="button"
-                title="Delete connection"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleDelete(c);
-                }}
-                className="shrink-0 rounded p-0.5 text-text-secondary opacity-0 hover:text-error group-hover:opacity-100"
-              >
-                <svg className="h-3.5 w-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
-                  <line x1="4" y1="4" x2="12" y2="12" />
-                  <line x1="12" y1="4" x2="4" y2="12" />
-                </svg>
-              </button>
+              <div className="flex shrink-0 items-start gap-1">
+                <span className="rounded bg-bg-tertiary px-1.5 py-0.5 text-xs text-text-secondary">
+                  {AUTH_TYPE_LABELS[c.authType] || c.authType}
+                </span>
+                <button
+                  type="button"
+                  title="Delete connection"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleDelete(c);
+                  }}
+                  className="rounded p-0.5 text-text-secondary opacity-0 hover:text-error group-hover:opacity-100 focus:opacity-100"
+                >
+                  <svg className="h-3.5 w-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+                    <line x1="4" y1="4" x2="12" y2="12" />
+                    <line x1="12" y1="4" x2="4" y2="12" />
+                  </svg>
+                </button>
+              </div>
             </div>
           ))
         )}

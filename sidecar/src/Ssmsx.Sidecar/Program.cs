@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Reflection;
 using System.Text.Json;
 using Ssmsx.Protocol;
 using Ssmsx.Protocol.Messages;
@@ -20,6 +21,7 @@ var schemaDiscovery = new SchemaDiscoveryService(connectionManager);
 var queryCancellationManager = new QueryCancellationManager();
 var queryExecutor = new QueryExecutor(connectionManager, queryCancellationManager);
 var intelliSenseService = new IntelliSenseService(connectionManager);
+var requestCancellation = new ConcurrentDictionary<string, CancellationTokenSource>();
 
 await using var stdout = Console.OpenStandardOutput();
 using var writer = new StreamWriter(stdout) { AutoFlush = true };
@@ -50,7 +52,7 @@ void SendError(string requestId, string code, string message)
 var handlers = new Dictionary<string, Func<JsonElement?, Task<JsonElement>>>
 {
     ["ping"] = _ => Task.FromResult(JsonSerializer.SerializeToElement(
-        new PingResult { Message = "pong", Version = "0.1.0" },
+        new PingResult { Message = "pong", Version = SidecarVersion() },
         ProtocolJsonContext.Default.PingResult)),
 
     ["connection.list"] = async _ =>
@@ -109,34 +111,6 @@ var handlers = new Dictionary<string, Func<JsonElement?, Task<JsonElement>>>
         return JsonSerializer.SerializeToElement(
             new ConnectionDeleteResult { Deleted = deleted },
             ProtocolJsonContext.Default.ConnectionDeleteResult);
-    },
-
-    ["connection.test"] = async p =>
-    {
-        var args = Deserialize<ConnectionTestParams>(p, ProtocolJsonContext.Default.ConnectionTestParams);
-        try
-        {
-            await connectionManager.TestAsync(args.Connection, credentialStore, args.Password);
-            return JsonSerializer.SerializeToElement(
-                new ConnectionTestResult { Success = true },
-                ProtocolJsonContext.Default.ConnectionTestResult);
-        }
-        catch (Exception ex)
-        {
-            await Console.Error.WriteLineAsync($"Connection test failed: {ex}");
-            return JsonSerializer.SerializeToElement(
-                new ConnectionTestResult { Success = false, Error = ex.Message },
-                ProtocolJsonContext.Default.ConnectionTestResult);
-        }
-    },
-
-    ["connection.connect"] = async p =>
-    {
-        var args = Deserialize<ConnectionConnectParams>(p, ProtocolJsonContext.Default.ConnectionConnectParams);
-        var connId = await connectionManager.ConnectAsync(args.Id, connectionStore, credentialStore);
-        return JsonSerializer.SerializeToElement(
-            new ConnectionConnectResult { ConnectionId = connId },
-            ProtocolJsonContext.Default.ConnectionConnectResult);
     },
 
     ["connection.disconnect"] = async p =>
@@ -234,6 +208,49 @@ var handlers = new Dictionary<string, Func<JsonElement?, Task<JsonElement>>>
     // (not here) so it works even while a query blocks the main loop.
 };
 
+static string SidecarVersion()
+{
+    return Assembly
+        .GetExecutingAssembly()
+        .GetCustomAttribute<AssemblyInformationalVersionAttribute>()
+        ?.InformationalVersion ?? "dev";
+}
+
+var cancellableHandlers = new Dictionary<string, Func<JsonElement?, CancellationToken, Task<JsonElement>>>
+{
+    ["connection.test"] = async (p, ct) =>
+    {
+        var args = Deserialize<ConnectionTestParams>(p, ProtocolJsonContext.Default.ConnectionTestParams);
+        try
+        {
+            await connectionManager.TestAsync(args.Connection, credentialStore, args.Password, ct);
+            return JsonSerializer.SerializeToElement(
+                new ConnectionTestResult { Success = true },
+                ProtocolJsonContext.Default.ConnectionTestResult);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            await Console.Error.WriteLineAsync($"Connection test failed: {ex}");
+            return JsonSerializer.SerializeToElement(
+                new ConnectionTestResult { Success = false, Error = ex.Message },
+                ProtocolJsonContext.Default.ConnectionTestResult);
+        }
+    },
+
+    ["connection.connect"] = async (p, ct) =>
+    {
+        var args = Deserialize<ConnectionConnectParams>(p, ProtocolJsonContext.Default.ConnectionConnectParams);
+        var connId = await connectionManager.ConnectAsync(args.Id, connectionStore, credentialStore, ct);
+        return JsonSerializer.SerializeToElement(
+            new ConnectionConnectResult { ConnectionId = connId },
+            ProtocolJsonContext.Default.ConnectionConnectResult);
+    },
+};
+
 // --- Request processing ---
 // We use a concurrent queue + semaphore so a background stdin reader can enqueue
 // requests while the main processing loop handles them one at a time.
@@ -257,6 +274,33 @@ var stdinReader = new Thread(() =>
         try
         {
             var peek = JsonSerializer.Deserialize(inputLine, ProtocolJsonContext.Default.JsonRpcRequest);
+            if (peek is not null && peek.Method == "request.cancel")
+            {
+                try
+                {
+                    var cancelArgs = Deserialize<RequestCancelParams>(peek.Params, ProtocolJsonContext.Default.RequestCancelParams);
+                    var cancelled = false;
+                    if (requestCancellation.TryGetValue(cancelArgs.RequestId, out var cts))
+                    {
+                        try
+                        {
+                            cts.Cancel();
+                            cancelled = true;
+                        }
+                        catch (ObjectDisposedException)
+                        {
+                            cancelled = false;
+                        }
+                    }
+                    SendResult(peek.Id, JsonSerializer.SerializeToElement(cancelled, ProtocolJsonContext.Default.Boolean));
+                }
+                catch (Exception ex)
+                {
+                    SendError(peek.Id, "CANCEL_ERROR", ex.Message);
+                }
+                continue;
+            }
+
             if (peek is not null && peek.Method == "query.cancel")
             {
                 try
@@ -309,6 +353,14 @@ foreach (var requestLine in requestQueue.GetConsumingEnumerable())
         if (request.Method == "query.execute")
         {
             await HandleQueryExecute(request.Id, request.Params);
+            continue;
+        }
+
+        if (cancellableHandlers.TryGetValue(request.Method, out var cancellableHandler))
+        {
+            var cts = new CancellationTokenSource();
+            requestCancellation[request.Id] = cts;
+            _ = Task.Run(() => HandleCancellableRequest(request, cancellableHandler, cts));
             continue;
         }
 
@@ -369,6 +421,31 @@ async Task HandleQueryExecute(string requestId, JsonElement? p)
     {
         await Console.Error.WriteLineAsync($"Error executing query '{queryId}': {ex.Message}");
         SendError(requestId, "QUERY_ERROR", ex.Message);
+    }
+}
+
+async Task HandleCancellableRequest(
+    JsonRpcRequest request,
+    Func<JsonElement?, CancellationToken, Task<JsonElement>> handler,
+    CancellationTokenSource cts)
+{
+    try
+    {
+        var result = await handler(request.Params, cts.Token);
+        SendResult(request.Id, result);
+    }
+    catch (OperationCanceledException)
+    {
+        SendError(request.Id, "REQUEST_CANCELLED", "Request cancelled");
+    }
+    catch (Exception ex)
+    {
+        SendError(request.Id, "INTERNAL_ERROR", ex.Message);
+    }
+    finally
+    {
+        requestCancellation.TryRemove(request.Id, out _);
+        cts.Dispose();
     }
 }
 

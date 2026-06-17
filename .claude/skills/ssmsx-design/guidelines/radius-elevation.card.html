@@ -1,0 +1,27 @@
+<!-- @dsCard group="Spacing" viewport="700x170" name="Radius & elevation" subtitle="Near-flat: small radii on controls, soft shadows on floating surfaces" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<link rel="stylesheet" href="../styles.css" />
+<style>
+  body { margin: 0; font-family: var(--font-ui); background: var(--surface-panel); padding: 22px; }
+  .row { display: flex; gap: 22px; align-items: center; }
+  .item { display: flex; flex-direction: column; align-items: center; gap: 8px; font-family: var(--font-mono); font-size: 10px; color: var(--text-secondary); }
+  .box { width: 60px; height: 44px; background: var(--surface-input); border: 1px solid var(--border-default); }
+  .sep { width: 1px; height: 56px; background: var(--border-default); }
+</style>
+</head>
+<body>
+  <div class="row">
+    <div class="item"><div class="box" style="border-radius:var(--radius-xs)"></div>xs · 2</div>
+    <div class="item"><div class="box" style="border-radius:var(--radius-sm)"></div>sm · 4</div>
+    <div class="item"><div class="box" style="border-radius:var(--radius-md)"></div>md · 6</div>
+    <div class="item"><div class="box" style="border-radius:var(--radius-lg)"></div>lg · 8</div>
+    <div class="sep"></div>
+    <div class="item"><div class="box" style="border:none;box-shadow:var(--shadow-sm);border-radius:var(--radius-sm)"></div>shadow-sm</div>
+    <div class="item"><div class="box" style="border:none;box-shadow:var(--shadow-md);border-radius:var(--radius-sm)"></div>menu · md</div>
+    <div class="item"><div class="box" style="border:none;box-shadow:var(--shadow-lg);border-radius:var(--radius-sm)"></div>dialog · lg</div>
+  </div>
+</body>
+</html>

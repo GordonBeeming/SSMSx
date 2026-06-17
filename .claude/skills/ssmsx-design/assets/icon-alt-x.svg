@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-label="SSMSX alternate — X">
+  <rect width="512" height="512" rx="112" fill="#0063B2"></rect>
+  <g stroke="#fff" stroke-width="62" stroke-linecap="round">
+    <line x1="176" y1="168" x2="336" y2="344"></line>
+    <line x1="336" y1="168" x2="176" y2="344"></line>
+  </g>
+</svg>

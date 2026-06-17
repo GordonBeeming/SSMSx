@@ -19,10 +19,12 @@ export function PropertiesTab() {
     selectedConnection,
     selectionVersion,
     loading,
+    activeOperation,
     testResult,
     saveConnection,
     testConnection,
     connect,
+    cancelConnectionAttempt,
     setFormDirty,
   } = useConnectionStore();
 
@@ -300,19 +302,28 @@ export function PropertiesTab() {
           </div>
         )}
         <div className="flex justify-end gap-2">
+          {loading && activeOperation && (
+            <button
+              type="button"
+              onClick={cancelConnectionAttempt}
+              className="rounded border border-bg-tertiary bg-bg-primary px-4 py-1.5 text-sm text-text-primary hover:bg-bg-secondary"
+            >
+              Cancel
+            </button>
+          )}
           <button
             onClick={handleTest}
             disabled={loading || !form.serverName}
             className="rounded border border-bg-tertiary bg-bg-secondary px-4 py-1.5 text-sm text-text-primary hover:bg-bg-tertiary disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {loading ? "Testing..." : "Test Connection"}
+            {activeOperation === "test" ? "Testing..." : "Test Connection"}
           </button>
           <button
             onClick={handleConnect}
             disabled={loading || !form.serverName}
             className="rounded bg-accent px-4 py-1.5 text-sm text-accent-text hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {loading ? "Connecting..." : "Connect"}
+            {activeOperation === "connect" ? "Connecting..." : "Connect"}
           </button>
         </div>
       </div>

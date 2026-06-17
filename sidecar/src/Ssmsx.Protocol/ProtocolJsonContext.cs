@@ -18,6 +18,7 @@ namespace Ssmsx.Protocol;
 [JsonSerializable(typeof(ConnectionTestParams))]
 [JsonSerializable(typeof(ConnectionConnectParams))]
 [JsonSerializable(typeof(ConnectionDisconnectParams))]
+[JsonSerializable(typeof(RequestCancelParams))]
 [JsonSerializable(typeof(ConnectionTestResult))]
 [JsonSerializable(typeof(ConnectionConnectResult))]
 [JsonSerializable(typeof(ConnectionDeleteResult))]

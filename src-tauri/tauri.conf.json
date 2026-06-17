@@ -1,6 +1,6 @@
 {
   "$schema": "https://raw.githubusercontent.com/tauri-apps/tauri/tauri-v2.10.3/crates/tauri-config-schema/schema.json",
-  "productName": "SSMSX",
+  "productName": "SSMSx",
   "version": "0.1.0",
   "identifier": "com.ssmsx.app",
   "build": {
@@ -26,7 +26,7 @@
   "app": {
     "windows": [
       {
-        "title": "SSMSX",
+        "title": "SSMSx",
         "width": 1200,
         "height": 800,
         "resizable": true,

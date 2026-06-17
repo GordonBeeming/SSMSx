@@ -2,6 +2,7 @@ export type ExplorerNodeType =
   | "server"
   | "database"
   | "folder"
+  | "schema"
   | "table"
   | "view"
   | "column"

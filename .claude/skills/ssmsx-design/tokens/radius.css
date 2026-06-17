@@ -1,0 +1,25 @@
+/* SSMSX — Radius & elevation tokens
+   Restrained, near-flat. Controls get a small radius; only dialogs and the app
+   icon round more. Elevation is used sparingly — just for floating surfaces. */
+
+:root {
+  /* ---- Corner radius ---- */
+  --radius-xs:   2px;  /* chips, color dots framing, tiny buttons */
+  --radius-sm:   4px;  /* buttons, inputs, tabs, default control radius */
+  --radius-md:   6px;  /* cards, grouped panels */
+  --radius-lg:   8px;  /* dialogs / modal surfaces */
+  --radius-full: 9999px; /* connection color dots, pills */
+
+  /* ---- Borders ---- */
+  --border-width: 1px;
+
+  /* ---- Elevation (floating surfaces only) ---- */
+  --shadow-sm: 0 1px 2px rgba(16, 24, 40, 0.06);
+  /* context menus / popovers (shadow-lg) */
+  --shadow-md: 0 4px 12px rgba(16, 24, 40, 0.12);
+  /* dialogs (shadow-xl) */
+  --shadow-lg: 0 12px 32px rgba(16, 24, 40, 0.18);
+
+  /* ---- Focus ---- */
+  --focus-ring: 0 0 0 1px var(--accent);
+}

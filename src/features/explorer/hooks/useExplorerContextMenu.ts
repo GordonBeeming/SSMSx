@@ -98,28 +98,33 @@ export function useExplorerContextMenu() {
           break;
 
         case "database":
-          items.push({
-            type: "submenu",
-            label: "New",
-            items: [
-              {
-                type: "action",
-                label: "Query",
-                onClick: openNewQuery,
-              },
-              {
-                type: "action",
-                label: "Diagram",
-                onClick: openNewDiagram,
-              },
-            ],
-          });
-          items.push({ type: "separator" });
+        case "schema":
           items.push({
             type: "action",
             label: "Refresh",
             onClick: () => refreshNode(node.id),
           });
+          if (node.type === "database") {
+            items.unshift(
+              {
+                type: "submenu",
+                label: "New",
+                items: [
+                  {
+                    type: "action",
+                    label: "Query",
+                    onClick: openNewQuery,
+                  },
+                  {
+                    type: "action",
+                    label: "Diagram",
+                    onClick: openNewDiagram,
+                  },
+                ],
+              },
+              { type: "separator" }
+            );
+          }
           break;
 
         case "table":
