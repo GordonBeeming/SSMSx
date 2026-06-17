@@ -155,10 +155,14 @@ export function QueryResultsTable({ result }: QueryResultsTableProps) {
       const currentCell = selectedCell ?? { rowIndex: 0, colIndex: 0 };
       const moveSelection = (rowDelta: number, colDelta: number) => {
         event.preventDefault();
-        setSelectedCell({
-          rowIndex: clampIndex(currentCell.rowIndex + rowDelta, rowCount),
-          colIndex: clampIndex(currentCell.colIndex + colDelta, colCount),
-        });
+        setSelectedCell(
+          selectedCell
+            ? {
+                rowIndex: clampIndex(currentCell.rowIndex + rowDelta, rowCount),
+                colIndex: clampIndex(currentCell.colIndex + colDelta, colCount),
+              }
+            : { rowIndex: 0, colIndex: 0 }
+        );
         setAllRowsSelected(false);
       };
 

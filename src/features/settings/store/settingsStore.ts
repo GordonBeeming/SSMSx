@@ -14,7 +14,9 @@ function loadSettings(): AppSettings {
     const storedValue = window.localStorage.getItem(SETTINGS_STORAGE_KEY);
     if (!storedValue) return defaultSettings;
 
-    const parsed = JSON.parse(storedValue) as Partial<AppSettings>;
+    const parsed = JSON.parse(storedValue) as Partial<AppSettings> | null;
+    if (!parsed || typeof parsed !== "object") return defaultSettings;
+
     return {
       explorer: {
         groupTablesBySchema:
