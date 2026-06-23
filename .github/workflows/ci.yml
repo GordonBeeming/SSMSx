@@ -106,6 +106,18 @@ jobs:
       - name: Run .NET tests
         run: dotnet test sidecar/Ssmsx.Sidecar.slnx --filter "Category!=Integration"
 
+      - name: Publish sidecar (${{ matrix.dotnet-rid }})
+        run: dotnet publish sidecar/src/Ssmsx.Sidecar -c Release -r ${{ matrix.dotnet-rid }}
+
+      - name: Copy sidecar binary to src-tauri/sidecars/
+        shell: bash
+        run: |
+          mkdir -p src-tauri/sidecars
+          src="sidecar/src/Ssmsx.Sidecar/bin/Release/net10.0/${{ matrix.dotnet-rid }}/publish/Ssmsx.Sidecar${{ matrix.sidecar-ext }}"
+          dst="src-tauri/sidecars/ssmsx-sidecar-${{ matrix.sidecar-triple }}${{ matrix.sidecar-ext }}"
+          cp "$src" "$dst"
+          echo "Copied sidecar to $dst"
+
       # ── Rust checks ──────────────────────────────────────────
       - name: Check Rust formatting
         run: cargo fmt --manifest-path src-tauri/Cargo.toml --check
@@ -120,6 +132,7 @@ jobs:
         run: cargo check --manifest-path src-tauri/Cargo.toml
 
       - name: Install cargo-audit
+        shell: bash
         run: |
           if ! command -v cargo-audit >/dev/null 2>&1; then
             cargo install cargo-audit --locked
@@ -129,18 +142,6 @@ jobs:
         run: |
           cd src-tauri
           cargo audit
-
-      - name: Publish sidecar (${{ matrix.dotnet-rid }})
-        run: dotnet publish sidecar/src/Ssmsx.Sidecar -c Release -r ${{ matrix.dotnet-rid }}
-
-      - name: Copy sidecar binary to src-tauri/sidecars/
-        shell: bash
-        run: |
-          mkdir -p src-tauri/sidecars
-          src="sidecar/src/Ssmsx.Sidecar/bin/Release/net10.0/${{ matrix.dotnet-rid }}/publish/Ssmsx.Sidecar${{ matrix.sidecar-ext }}"
-          dst="src-tauri/sidecars/ssmsx-sidecar-${{ matrix.sidecar-triple }}${{ matrix.sidecar-ext }}"
-          cp "$src" "$dst"
-          echo "Copied sidecar to $dst"
 
       # ── Tauri CLI ──────────────────────────────────────────────
       - name: Install Tauri CLI
