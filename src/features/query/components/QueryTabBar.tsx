@@ -24,7 +24,13 @@ export function QueryTabBar() {
     []
   );
 
-  const handleAuxClose = useCallback(
+  const handleMiddleMouseDown = useCallback((e: React.MouseEvent) => {
+    if (e.button !== 1) return;
+    e.preventDefault();
+    e.stopPropagation();
+  }, []);
+
+  const handleAuxClick = useCallback(
     (e: React.MouseEvent, tabId: string) => {
       if (e.button !== 1) return;
       e.preventDefault();
@@ -72,8 +78,8 @@ export function QueryTabBar() {
                   : "text-text-secondary hover:bg-bg-tertiary"
               }`}
               onContextMenu={(e) => handleContextMenu(e, tab.id)}
-              onMouseDown={(e) => handleAuxClose(e, tab.id)}
-              onAuxClick={(e) => handleAuxClose(e, tab.id)}
+              onMouseDown={handleMiddleMouseDown}
+              onAuxClick={(e) => handleAuxClick(e, tab.id)}
             >
               {tab.connectionColor && (
                 <div

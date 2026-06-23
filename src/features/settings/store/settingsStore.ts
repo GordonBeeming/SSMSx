@@ -10,6 +10,10 @@ interface SettingsState {
   setPersistQueryTabs: (value: boolean) => void;
 }
 
+function readBoolean(value: unknown, fallback: boolean): boolean {
+  return typeof value === "boolean" ? value : fallback;
+}
+
 function loadSettings(): AppSettings {
   try {
     const storedValue = window.localStorage.getItem(SETTINGS_STORAGE_KEY);
@@ -20,14 +24,16 @@ function loadSettings(): AppSettings {
 
     return {
       explorer: {
-        groupTablesBySchema:
-          parsed.explorer?.groupTablesBySchema ??
-          defaultSettings.explorer.groupTablesBySchema,
+        groupTablesBySchema: readBoolean(
+          parsed.explorer?.groupTablesBySchema,
+          defaultSettings.explorer.groupTablesBySchema
+        ),
       },
       workspace: {
-        persistQueryTabs:
-          parsed.workspace?.persistQueryTabs ??
-          defaultSettings.workspace.persistQueryTabs,
+        persistQueryTabs: readBoolean(
+          parsed.workspace?.persistQueryTabs,
+          defaultSettings.workspace.persistQueryTabs
+        ),
       },
     };
   } catch {
