@@ -9,7 +9,7 @@ pub async fn explorer_databases(
     let result = sidecar
         .send_request("explorer.databases", Some(params))
         .await?;
-    Ok(serde_json::to_string(&result).map_err(|e| e.to_string())?)
+    serde_json::to_string(&result).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -22,7 +22,7 @@ pub async fn explorer_tables(
     let result = sidecar
         .send_request("explorer.tables", Some(params))
         .await?;
-    Ok(serde_json::to_string(&result).map_err(|e| e.to_string())?)
+    serde_json::to_string(&result).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -32,10 +32,8 @@ pub async fn explorer_views(
     database: String,
 ) -> Result<String, String> {
     let params = serde_json::json!({ "connectionId": connection_id, "database": database });
-    let result = sidecar
-        .send_request("explorer.views", Some(params))
-        .await?;
-    Ok(serde_json::to_string(&result).map_err(|e| e.to_string())?)
+    let result = sidecar.send_request("explorer.views", Some(params)).await?;
+    serde_json::to_string(&result).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -55,7 +53,7 @@ pub async fn explorer_columns(
     let result = sidecar
         .send_request("explorer.columns", Some(params))
         .await?;
-    Ok(serde_json::to_string(&result).map_err(|e| e.to_string())?)
+    serde_json::to_string(&result).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -72,10 +70,8 @@ pub async fn explorer_keys(
         "schema": schema,
         "tableName": table_name
     });
-    let result = sidecar
-        .send_request("explorer.keys", Some(params))
-        .await?;
-    Ok(serde_json::to_string(&result).map_err(|e| e.to_string())?)
+    let result = sidecar.send_request("explorer.keys", Some(params)).await?;
+    serde_json::to_string(&result).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -95,7 +91,7 @@ pub async fn explorer_indexes(
     let result = sidecar
         .send_request("explorer.indexes", Some(params))
         .await?;
-    Ok(serde_json::to_string(&result).map_err(|e| e.to_string())?)
+    serde_json::to_string(&result).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -108,7 +104,7 @@ pub async fn explorer_procedures(
     let result = sidecar
         .send_request("explorer.procedures", Some(params))
         .await?;
-    Ok(serde_json::to_string(&result).map_err(|e| e.to_string())?)
+    serde_json::to_string(&result).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -121,7 +117,7 @@ pub async fn explorer_functions(
     let result = sidecar
         .send_request("explorer.functions", Some(params))
         .await?;
-    Ok(serde_json::to_string(&result).map_err(|e| e.to_string())?)
+    serde_json::to_string(&result).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -131,10 +127,8 @@ pub async fn explorer_users(
     database: String,
 ) -> Result<String, String> {
     let params = serde_json::json!({ "connectionId": connection_id, "database": database });
-    let result = sidecar
-        .send_request("explorer.users", Some(params))
-        .await?;
-    Ok(serde_json::to_string(&result).map_err(|e| e.to_string())?)
+    let result = sidecar.send_request("explorer.users", Some(params)).await?;
+    serde_json::to_string(&result).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -156,7 +150,7 @@ pub async fn explorer_object_definition(
     let result = sidecar
         .send_request("explorer.objectDefinition", Some(params))
         .await?;
-    Ok(serde_json::to_string(&result).map_err(|e| e.to_string())?)
+    serde_json::to_string(&result).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -169,5 +163,5 @@ pub async fn explorer_database_diagram(
     let result = sidecar
         .send_request("explorer.databaseDiagram", Some(params))
         .await?;
-    Ok(serde_json::to_string(&result).map_err(|e| e.to_string())?)
+    serde_json::to_string(&result).map_err(|e| e.to_string())
 }

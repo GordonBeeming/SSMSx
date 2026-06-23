@@ -4,6 +4,7 @@ on:
   push:
     branches: [main]
   pull_request:
+    branches: [main]
   release:
     types: [published]
 
@@ -41,11 +42,13 @@ jobs:
     steps:
       # ── Checkout ──────────────────────────────────────────────
       - name: Checkout code
-        uses: actions/checkout@v7
+        uses: actions/checkout@v4
 
       # ── Toolchains ───────────────────────────────────────────
       - name: Install Rust (stable)
         uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
 
       - name: Install .NET 10
         uses: actions/setup-dotnet@v5
@@ -53,7 +56,7 @@ jobs:
           dotnet-version: 10.0.x
 
       - name: Install Node.js 24
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: npm
@@ -67,9 +70,10 @@ jobs:
 
       # ── Caching ──────────────────────────────────────────────
       - name: Cache Cargo registry and target
-        uses: actions/cache@v5
+        uses: actions/cache@v4
         with:
           path: |
+            ~/.cargo/bin/cargo-audit
             ~/.cargo/registry
             ~/.cargo/git
             src-tauri/target
@@ -78,7 +82,7 @@ jobs:
             cargo-${{ runner.os }}-
 
       - name: Cache NuGet packages
-        uses: actions/cache@v5
+        uses: actions/cache@v4
         with:
           path: ~/.nuget/packages
           key: nuget-${{ runner.os }}-${{ hashFiles('**/Directory.Packages.props') }}
@@ -92,12 +96,39 @@ jobs:
       - name: Build frontend
         run: npm run build
 
+      - name: Run npm audit
+        run: npm audit --audit-level=moderate
+
       # ── .NET sidecar ─────────────────────────────────────────
       - name: Build .NET sidecar
         run: dotnet build sidecar/Ssmsx.Sidecar.slnx
 
       - name: Run .NET tests
         run: dotnet test sidecar/Ssmsx.Sidecar.slnx --filter "Category!=Integration"
+
+      # ── Rust checks ──────────────────────────────────────────
+      - name: Check Rust formatting
+        run: cargo fmt --manifest-path src-tauri/Cargo.toml --check
+
+      - name: Run Rust clippy
+        run: cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
+
+      - name: Run Rust tests
+        run: cargo test --manifest-path src-tauri/Cargo.toml
+
+      - name: Check Rust build
+        run: cargo check --manifest-path src-tauri/Cargo.toml
+
+      - name: Install cargo-audit
+        run: |
+          if ! command -v cargo-audit >/dev/null 2>&1; then
+            cargo install cargo-audit --locked
+          fi
+
+      - name: Run Rust advisory audit
+        run: |
+          cd src-tauri
+          cargo audit
 
       - name: Publish sidecar (${{ matrix.dotnet-rid }})
         run: dotnet publish sidecar/src/Ssmsx.Sidecar -c Release -r ${{ matrix.dotnet-rid }}
@@ -131,7 +162,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@v4
 
       - name: Install Rust (stable)
         uses: dtolnay/rust-toolchain@stable
@@ -142,22 +173,41 @@ jobs:
           dotnet-version: 10.0.x
 
       - name: Install Node.js 24
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: npm
+
+      - name: Cache Rust build output
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            src-tauri/target
+          key: ${{ runner.os }}-release-cargo-${{ hashFiles('src-tauri/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-release-cargo-
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: release-nuget-${{ runner.os }}-${{ hashFiles('**/Directory.Packages.props') }}
+          restore-keys: |
+            release-nuget-${{ runner.os }}-
 
       - name: Install npm dependencies
         run: npm ci
 
       - name: Set release version
         run: |
-          export VERSION="${GITHUB_REF_NAME#v}"
-          if [[ ! "${GITHUB_REF_NAME}" =~ ^v[0-9]+\.[0-9]+$ ]]; then
-            echo "Release tag must be major.minor with a v prefix, like v0.1; got ${GITHUB_REF_NAME}" >&2
+          if [[ ! "${GITHUB_REF_NAME}" =~ ^v([0-9]+)\.([0-9]+)(-beta\.[0-9]+)?$ ]]; then
+            echo "Release tag must be stable v{major}.{minor} or beta v{major}.{minor}-beta.{n}, like v0.1 or v0.1-beta.1; got ${GITHUB_REF_NAME}" >&2
             exit 1
           fi
-          export APP_VERSION="${VERSION}.${GITHUB_RUN_NUMBER}"
+          export VERSION="${GITHUB_REF_NAME#v}"
+          export APP_VERSION="${BASH_REMATCH[1]}.${BASH_REMATCH[2]}.${GITHUB_RUN_NUMBER}${BASH_REMATCH[3]}"
 
           node --input-type=module <<'NODE'
           import fs from "node:fs";
@@ -302,7 +352,7 @@ jobs:
             version "${VERSION}"
             sha256 "${DMG_SHA256}"
 
-            url "https://github.com/gordonbeeming/ssmsx/releases/download/v#{version.major_minor}/ssmsx-#{version.major_minor}-aarch64.dmg"
+            url "https://github.com/gordonbeeming/ssmsx/releases/download/v${VERSION}/ssmsx-${VERSION}-aarch64.dmg"
             name "SSMSx"
             desc "Fast cross-platform SQL Server Management Studio replacement"
             homepage "https://github.com/gordonbeeming/ssmsx"
