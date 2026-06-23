@@ -23,6 +23,7 @@ export interface ExplorerNode {
   database?: string;
   tableName?: string;
   diagramViewId?: string;
+  tableCache?: TableInfo[];
   expanded: boolean;
   loading: boolean;
   loaded: boolean;

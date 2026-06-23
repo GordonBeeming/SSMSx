@@ -61,6 +61,7 @@ export function ObjectExplorerTree() {
   const previousGroupTablesBySchemaRef = useRef(groupTablesBySchema);
   const resizeStartXRef = useRef(0);
   const resizeStartWidthRef = useRef(DEFAULT_EXPLORER_WIDTH);
+  const resizeCurrentWidthRef = useRef(DEFAULT_EXPLORER_WIDTH);
   const handleKeyDown = useTreeKeyboard(visibleNodes);
   const getMenuItems = useExplorerContextMenu();
   const [explorerWidth, setExplorerWidth] = useState(loadExplorerWidth);
@@ -129,6 +130,7 @@ export function ObjectExplorerTree() {
       event.preventDefault();
       resizeStartXRef.current = event.clientX;
       resizeStartWidthRef.current = explorerWidth;
+      resizeCurrentWidthRef.current = explorerWidth;
 
       const previousCursor = document.body.style.cursor;
       const previousUserSelect = document.body.style.userSelect;
@@ -139,25 +141,33 @@ export function ObjectExplorerTree() {
         const nextWidth = clampExplorerWidth(
           resizeStartWidthRef.current + moveEvent.clientX - resizeStartXRef.current
         );
+        resizeCurrentWidthRef.current = nextWidth;
         setExplorerWidth(nextWidth);
+      };
+
+      const cleanupResize = () => {
+        saveExplorerWidth(resizeCurrentWidthRef.current);
+        document.body.style.cursor = previousCursor;
+        document.body.style.userSelect = previousUserSelect;
+        document.removeEventListener("pointermove", handlePointerMove);
+        document.removeEventListener("pointerup", handlePointerUp);
+        document.removeEventListener("pointercancel", handlePointerUp);
+        window.removeEventListener("blur", cleanupResize);
       };
 
       const handlePointerUp = (upEvent: PointerEvent) => {
         const nextWidth = clampExplorerWidth(
           resizeStartWidthRef.current + upEvent.clientX - resizeStartXRef.current
         );
+        resizeCurrentWidthRef.current = nextWidth;
         setExplorerWidth(nextWidth);
-        saveExplorerWidth(nextWidth);
-        document.body.style.cursor = previousCursor;
-        document.body.style.userSelect = previousUserSelect;
-        document.removeEventListener("pointermove", handlePointerMove);
-        document.removeEventListener("pointerup", handlePointerUp);
-        document.removeEventListener("pointercancel", handlePointerUp);
+        cleanupResize();
       };
 
       document.addEventListener("pointermove", handlePointerMove);
       document.addEventListener("pointerup", handlePointerUp);
       document.addEventListener("pointercancel", handlePointerUp);
+      window.addEventListener("blur", cleanupResize);
     },
     [explorerWidth]
   );

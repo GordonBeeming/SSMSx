@@ -171,6 +171,7 @@ export const useConnectionStore = create<ConnectionState>((set, get) => ({
       loading: true,
       activeOperation: "connect",
       activeRequestId: requestId,
+      testResult: null,
       error: null,
     });
     try {

@@ -123,18 +123,24 @@ export function QueryPanel() {
         updateResultsHeight(moveEvent.clientY);
       };
 
-      const handlePointerUp = (upEvent: PointerEvent) => {
-        updateResultsHeight(upEvent.clientY);
+      const cleanupResize = () => {
         document.body.style.cursor = previousCursor;
         document.body.style.userSelect = previousUserSelect;
         document.removeEventListener("pointermove", handlePointerMove);
         document.removeEventListener("pointerup", handlePointerUp);
         document.removeEventListener("pointercancel", handlePointerUp);
+        window.removeEventListener("blur", cleanupResize);
+      };
+
+      const handlePointerUp = (upEvent: PointerEvent) => {
+        updateResultsHeight(upEvent.clientY);
+        cleanupResize();
       };
 
       document.addEventListener("pointermove", handlePointerMove);
       document.addEventListener("pointerup", handlePointerUp);
       document.addEventListener("pointercancel", handlePointerUp);
+      window.addEventListener("blur", cleanupResize);
     },
     []
   );

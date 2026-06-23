@@ -318,6 +318,7 @@ async function fetchChildren(node: ExplorerNode): Promise<ExplorerNode[]> {
                 name: schema,
                 schema,
                 database: db,
+                tableCache: tables,
                 expanded: false,
                 loading: false,
                 loaded: false,
@@ -355,7 +356,7 @@ async function fetchChildren(node: ExplorerNode): Promise<ExplorerNode[]> {
             return children;
           }
 
-          const tables = await explorerTables(connectionId, db);
+          const tables = node.tableCache ?? (await explorerTables(connectionId, db));
           for (const t of tables.filter((table) => table.schema === node.schema)) {
             children.push({
               id: makeNodeId(connectionId, "db", db, "table", t.schema, t.name),
