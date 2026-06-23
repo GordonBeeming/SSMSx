@@ -1,7 +1,11 @@
 import { useEffect, useCallback, useRef, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { Info } from "lucide-react";
-import { useConnectionStore, ConnectionDialog } from "../features/connection";
+import {
+  useConnectionStore,
+  ConnectionAuthProgressDialog,
+  ConnectionDialog,
+} from "../features/connection";
 import { useQueryStore, QueryPanel, QueryTabBar } from "../features/query";
 import { ObjectExplorerTree } from "../features/explorer";
 import { DatabaseDiagramWorkspace } from "../features/diagram";
@@ -429,6 +433,7 @@ function App() {
       </div>
 
       <ConnectionDialog />
+      <ConnectionAuthProgressDialog />
       <SettingsDialog
         open={settingsOpen}
         onClose={() => setSettingsOpen(false)}

@@ -14,6 +14,7 @@ export function QueryTargetBar({ tabId }: QueryTargetBarProps) {
   const connections = useConnectionStore((s) => s.connections);
   const activeConnectionIds = useConnectionStore((s) => s.activeConnectionIds);
   const connect = useConnectionStore((s) => s.connect);
+  const cancelConnectionAttempt = useConnectionStore((s) => s.cancelConnectionAttempt);
   const [databases, setDatabases] = useState<DatabaseInfo[]>([]);
   const [databaseLoading, setDatabaseLoading] = useState(false);
   const [databaseError, setDatabaseError] = useState<string | null>(null);
@@ -63,9 +64,31 @@ export function QueryTargetBar({ tabId }: QueryTargetBarProps) {
     };
   }, [isConnected, tab?.connectionId]);
 
+  useEffect(() => {
+    const handleCancelled = (event: Event) => {
+      const detail = (event as CustomEvent<{ connectionId: string | null }>).detail;
+      if (
+        tab?.connectionId &&
+        (!detail?.connectionId || detail.connectionId === tab.connectionId) &&
+        !useConnectionStore.getState().activeConnectionIds.includes(tab.connectionId)
+      ) {
+        updateTab(tab.id, { connectionId: null, connectionColor: undefined });
+      }
+    };
+
+    window.addEventListener("connection:attempt-cancelled", handleCancelled);
+    return () =>
+      window.removeEventListener("connection:attempt-cancelled", handleCancelled);
+  }, [tab?.connectionId, tab?.id, updateTab]);
+
   const handleConnectionChange = useCallback(
     async (connectionId: string) => {
       if (!tab) return;
+
+      const activeRequestId = useConnectionStore.getState().activeRequestId;
+      if (activeRequestId) {
+        await cancelConnectionAttempt();
+      }
 
       if (!connectionId) {
         updateTab(tab.id, { connectionId: null, connectionColor: undefined });
@@ -86,7 +109,7 @@ export function QueryTargetBar({ tabId }: QueryTargetBarProps) {
         }
       }
     },
-    [activeConnectionIds, connect, connections, tab, updateTab]
+    [activeConnectionIds, cancelConnectionAttempt, connect, connections, tab, updateTab]
   );
 
   if (!tab) return null;
