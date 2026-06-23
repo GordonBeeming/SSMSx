@@ -1,18 +1,31 @@
-import { useEffect, useCallback, useState } from "react";
+import { useEffect, useCallback, useRef, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { Info } from "lucide-react";
 import { useConnectionStore, ConnectionDialog } from "../features/connection";
 import { useQueryStore, QueryPanel, QueryTabBar } from "../features/query";
 import { ObjectExplorerTree } from "../features/explorer";
 import { DatabaseDiagramWorkspace } from "../features/diagram";
-import { SettingsDialog } from "../features/settings";
+import { SettingsDialog, useSettingsStore } from "../features/settings";
 import { isTauriRuntime } from "../shared/utils/tauri";
 import { AboutDialog } from "./AboutDialog";
+import type { ConnectionInfo } from "../features/connection";
 
 let tabCounter = 0;
 
 function isMac(): boolean {
   return navigator.platform.toUpperCase().includes("MAC");
+}
+
+function getHighestQueryNumber(tabs: { title: string }[]): number {
+  return tabs.reduce((max, tab) => {
+    const match = /^Query (\d+)$/.exec(tab.title);
+    if (!match) return max;
+    return Math.max(max, Number(match[1]));
+  }, 0);
+}
+
+function getConnectionLabel(connection: ConnectionInfo | undefined, connectionId: string): string {
+  return connection?.name || connection?.serverName || connectionId;
 }
 
 function App() {
@@ -32,6 +45,7 @@ function App() {
   const activeTab = tabs.find((t) => t.id === activeTabId);
   const [aboutOpen, setAboutOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const startupInitializedRef = useRef(false);
 
   const createNewTab = useCallback(() => {
     // Use the first active connection as default
@@ -48,6 +62,136 @@ function App() {
       connectionColor: defaultConn.color,
     });
   }, [activeConnections, addTab]);
+
+  const persistQuerySession = useCallback(() => {
+    const queryStore = useQueryStore.getState();
+    if (useSettingsStore.getState().settings.workspace.persistQueryTabs) {
+      queryStore.saveSession();
+    } else {
+      queryStore.discardSavedSession();
+    }
+  }, []);
+
+  useEffect(() => {
+    if (startupInitializedRef.current) return;
+    startupInitializedRef.current = true;
+
+    const initialize = async () => {
+      const queryStore = useQueryStore.getState();
+      const persistTabs =
+        useSettingsStore.getState().settings.workspace.persistQueryTabs;
+      if (!persistTabs) {
+        queryStore.discardSavedSession();
+      }
+
+      const restored = persistTabs && queryStore.restoreSavedSession();
+      tabCounter = Math.max(tabCounter, getHighestQueryNumber(queryStore.tabs));
+
+      if (!restored) {
+        useConnectionStore.getState().openDialog();
+        return;
+      }
+
+      const connectionStore = useConnectionStore.getState();
+      await connectionStore.loadConnections();
+
+      const restoredConnectionIds = Array.from(
+        new Set(
+          useQueryStore
+            .getState()
+            .tabs.map((tab) => tab.connectionId)
+            .filter((id): id is string => !!id)
+        )
+      );
+
+      for (const connectionId of restoredConnectionIds) {
+        const latestConnections = useConnectionStore.getState().connections;
+        const connection = latestConnections.find((c) => c.id === connectionId);
+        const shouldReconnect = window.confirm(
+          `Connect to ${getConnectionLabel(connection, connectionId)} again?`
+        );
+
+        if (!shouldReconnect || !connection) {
+          for (const tab of useQueryStore.getState().tabs) {
+            if (tab.connectionId === connectionId) {
+              useQueryStore
+                .getState()
+                .updateTab(tab.id, { connectionId: null, connectionColor: undefined });
+            }
+          }
+          continue;
+        }
+
+        await useConnectionStore.getState().connect(connectionId);
+        if (!useConnectionStore.getState().activeConnectionIds.includes(connectionId)) {
+          for (const tab of useQueryStore.getState().tabs) {
+            if (tab.connectionId === connectionId) {
+              useQueryStore
+                .getState()
+                .updateTab(tab.id, { connectionId: null, connectionColor: undefined });
+            }
+          }
+        }
+      }
+    };
+
+    initialize().catch((e) =>
+      console.error("Failed to restore query session:", e)
+    );
+  }, []);
+
+  useEffect(() => {
+    let saveTimer: number | undefined;
+
+    const schedulePersist = () => {
+      window.clearTimeout(saveTimer);
+      saveTimer = window.setTimeout(persistQuerySession, 250);
+    };
+
+    const saveNow = () => {
+      window.clearTimeout(saveTimer);
+      persistQuerySession();
+    };
+
+    const unsubscribeQuery = useQueryStore.subscribe((state, previousState) => {
+      if (
+        state.tabs !== previousState.tabs ||
+        state.tabSql !== previousState.tabSql ||
+        state.activeTabId !== previousState.activeTabId
+      ) {
+        schedulePersist();
+      }
+    });
+
+    const unsubscribeSettings = useSettingsStore.subscribe(
+      (state, previousState) => {
+        if (
+          state.settings.workspace.persistQueryTabs !==
+          previousState.settings.workspace.persistQueryTabs
+        ) {
+          saveNow();
+        }
+      }
+    );
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "hidden") {
+        saveNow();
+      }
+    };
+
+    window.addEventListener("pagehide", saveNow);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    saveNow();
+
+    return () => {
+      window.clearTimeout(saveTimer);
+      unsubscribeQuery();
+      unsubscribeSettings();
+      window.removeEventListener("pagehide", saveNow);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [persistQuerySession]);
 
   // Listen for new tab events from the tab bar's "+" button
   useEffect(() => {
@@ -114,17 +258,14 @@ function App() {
       // Query > Execute
       unlisteners.push(
         await listen("menu:execute-query", () => {
-          const store = useQueryStore.getState();
-          if (store.activeTabId) {
-            store.executeQuery(store.activeTabId);
-          }
+          window.dispatchEvent(new CustomEvent("query:execute"));
         })
       );
 
       // Query > Execute Selection
       unlisteners.push(
         await listen("menu:execute-selection", () => {
-          window.dispatchEvent(new CustomEvent("query:execute-selection"));
+          window.dispatchEvent(new CustomEvent("query:execute"));
         })
       );
 
@@ -170,10 +311,7 @@ function App() {
       // F5 — Execute query (global fallback when editor doesn't have focus)
       if (e.key === "F5") {
         e.preventDefault();
-        const store = useQueryStore.getState();
-        if (store.activeTabId) {
-          store.executeQuery(store.activeTabId);
-        }
+        window.dispatchEvent(new CustomEvent("query:execute"));
       }
 
       if ((e.metaKey || e.ctrlKey) && e.key === ",") {
@@ -250,7 +388,7 @@ function App() {
         <div className="flex flex-1 flex-col overflow-hidden">
           {tabs.length > 0 && <QueryTabBar />}
 
-          {activeTab?.kind === "diagram" ? (
+          {activeTab?.kind === "diagram" && activeTab.connectionId ? (
             <DatabaseDiagramWorkspace
               connectionId={activeTab.connectionId}
               database={activeTab.database}
@@ -259,6 +397,10 @@ function App() {
               onTitleChange={(title) => updateTab(activeTab.id, { title })}
               onClose={() => useQueryStore.getState().removeTab(activeTab.id)}
             />
+          ) : activeTab?.kind === "diagram" ? (
+            <div className="flex flex-1 items-center justify-center overflow-auto text-sm text-text-secondary">
+              Choose a connection to view this diagram.
+            </div>
           ) : activeTab ? (
             <QueryPanel />
           ) : (

@@ -8,8 +8,7 @@ import { useAppEditorTheme } from "../../../shared/hooks/useAppEditorTheme";
 interface QueryEditorProps {
   value: string;
   onChange: (value: string) => void;
-  onExecute: () => void;
-  onExecuteSelection: (sql: string) => void;
+  onExecute: (sql: string) => void;
   intellisenseMetadata?: IntelliSenseMetadata | null;
 }
 
@@ -17,7 +16,6 @@ export function QueryEditor({
   value,
   onChange,
   onExecute,
-  onExecuteSelection,
   intellisenseMetadata,
 }: QueryEditorProps) {
   const editorRef = useRef<monacoEditor.IStandaloneCodeEditor | null>(null);
@@ -29,8 +27,6 @@ export function QueryEditor({
   // Keep latest callbacks in refs so Monaco actions always call the current ones
   const onExecuteRef = useRef(onExecute);
   onExecuteRef.current = onExecute;
-  const onExecuteSelectionRef = useRef(onExecuteSelection);
-  onExecuteSelectionRef.current = onExecuteSelection;
 
   // Update completion provider when metadata changes
   useEffect(() => {
@@ -50,28 +46,15 @@ export function QueryEditor({
     };
   }, []);
 
-  // Listen for toolbar "Execute Selection" button
+  // Listen for toolbar Execute; Monaco owns the current selection.
   useEffect(() => {
     const handler = () => {
       const editor = editorRef.current;
       if (!editor) return;
-      const model = editor.getModel();
-      if (!model) return;
-
-      const selection = editor.getSelection();
-      let selectedText = "";
-      if (selection && !selection.isEmpty()) {
-        selectedText = model.getValueInRange(selection);
-      } else {
-        selectedText = getCurrentStatement(model, editor.getPosition());
-      }
-
-      if (selectedText.trim()) {
-        onExecuteSelectionRef.current(selectedText);
-      }
+      executeEditorSql(editor, onExecuteRef.current);
     };
-    window.addEventListener("query:execute-selection", handler);
-    return () => window.removeEventListener("query:execute-selection", handler);
+    window.addEventListener("query:execute", handler);
+    return () => window.removeEventListener("query:execute", handler);
   }, []);
 
   const handleMount: OnMount = useCallback(
@@ -88,39 +71,25 @@ export function QueryEditor({
         provider
       );
 
-      // F5 — Execute entire query
+      // F5 — execute selected SQL, or all SQL if nothing is selected.
       editor.addAction({
         id: "query-execute",
         label: "Execute Query",
         keybindings: [monaco.KeyCode.F5],
-        run: () => {
-          onExecuteRef.current();
+        run: (ed) => {
+          executeEditorSql(ed, onExecuteRef.current);
         },
       });
 
-      // Cmd/Ctrl+Shift+E — Execute selection or current statement
+      // Keep the previous shortcut as an alias for Execute.
       editor.addAction({
         id: "query-execute-selection",
-        label: "Execute Selection",
+        label: "Execute Query",
         keybindings: [
           monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.KeyE,
         ],
         run: (ed) => {
-          const selection = ed.getSelection();
-          const model = ed.getModel();
-          if (!model) return;
-
-          let selectedText = "";
-          if (selection && !selection.isEmpty()) {
-            selectedText = model.getValueInRange(selection);
-          } else {
-            // No selection — find current statement between GO delimiters
-            selectedText = getCurrentStatement(model, ed.getPosition());
-          }
-
-          if (selectedText.trim()) {
-            onExecuteSelectionRef.current(selectedText);
-          }
+          executeEditorSql(ed, onExecuteRef.current);
         },
       });
 
@@ -162,45 +131,20 @@ export function QueryEditor({
   );
 }
 
-/**
- * Find the current SQL statement at the cursor position,
- * delimited by GO on its own line or start/end of file.
- */
-function getCurrentStatement(
-  model: monacoEditor.ITextModel,
-  position: { lineNumber: number; column: number } | null
-): string {
-  if (!position) return model.getValue();
+function executeEditorSql(
+  editor: monacoEditor.ICodeEditor,
+  onExecute: (sql: string) => void
+): void {
+  const model = editor.getModel();
+  if (!model) return;
 
-  const lineCount = model.getLineCount();
-  const goPattern = /^\s*GO\s*$/i;
+  const selection = editor.getSelection();
+  const sql =
+    selection && !selection.isEmpty()
+      ? model.getValueInRange(selection)
+      : model.getValue();
 
-  // Search backwards from cursor to find the start of the current statement
-  let startLine = 1;
-  for (let i = position.lineNumber - 1; i >= 1; i--) {
-    if (goPattern.test(model.getLineContent(i))) {
-      startLine = i + 1;
-      break;
-    }
+  if (sql.trim()) {
+    onExecute(sql);
   }
-
-  // Search forwards from cursor to find the end of the current statement
-  let endLine = lineCount;
-  for (let i = position.lineNumber; i <= lineCount; i++) {
-    if (goPattern.test(model.getLineContent(i))) {
-      endLine = i - 1;
-      break;
-    }
-  }
-
-  if (startLine > endLine) return "";
-
-  const range = {
-    startLineNumber: startLine,
-    startColumn: 1,
-    endLineNumber: endLine,
-    endColumn: model.getLineMaxColumn(endLine),
-  };
-
-  return model.getValueInRange(range);
 }

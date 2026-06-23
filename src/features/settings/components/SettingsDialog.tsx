@@ -16,6 +16,9 @@ export function SettingsDialog({ open: isOpen, onClose }: SettingsDialogProps) {
   const setGroupTablesBySchema = useSettingsStore(
     (state) => state.setGroupTablesBySchema
   );
+  const setPersistQueryTabs = useSettingsStore(
+    (state) => state.setPersistQueryTabs
+  );
 
   useEffect(() => {
     const dialog = dialogRef.current;
@@ -45,6 +48,33 @@ export function SettingsDialog({ open: isOpen, onClose }: SettingsDialogProps) {
         .includes(query)
     );
   }, [searchText]);
+
+  const categories = useMemo(
+    () => Array.from(new Set(settingsSchema.map((setting) => setting.category))),
+    []
+  );
+
+  const isSettingEnabled = (settingId: string): boolean => {
+    switch (settingId) {
+      case "explorer.groupTablesBySchema":
+        return settings.explorer.groupTablesBySchema;
+      case "workspace.persistQueryTabs":
+        return settings.workspace.persistQueryTabs;
+      default:
+        return false;
+    }
+  };
+
+  const updateSetting = (settingId: string, value: boolean): void => {
+    switch (settingId) {
+      case "explorer.groupTablesBySchema":
+        setGroupTablesBySchema(value);
+        break;
+      case "workspace.persistQueryTabs":
+        setPersistQueryTabs(value);
+        break;
+    }
+  };
 
   return (
     <dialog
@@ -82,10 +112,15 @@ export function SettingsDialog({ open: isOpen, onClose }: SettingsDialogProps) {
               />
             </div>
 
-            <nav className="mt-3">
-              <div className="rounded bg-bg-tertiary px-2 py-1.5 text-xs font-medium text-text-primary">
-                Object Explorer
-              </div>
+            <nav className="mt-3 grid gap-1">
+              {categories.map((category) => (
+                <div
+                  key={category}
+                  className="rounded px-2 py-1.5 text-xs font-medium text-text-secondary first:bg-bg-tertiary first:text-text-primary"
+                >
+                  {category}
+                </div>
+              ))}
             </nav>
           </aside>
 
@@ -113,9 +148,9 @@ export function SettingsDialog({ open: isOpen, onClose }: SettingsDialogProps) {
                     <label className="flex cursor-pointer items-center gap-2 rounded border border-bg-tertiary bg-bg-input px-3 py-2 text-sm text-text-primary hover:bg-bg-secondary">
                       <input
                         type="checkbox"
-                        checked={settings.explorer.groupTablesBySchema}
+                        checked={isSettingEnabled(setting.id)}
                         onChange={(event) =>
-                          setGroupTablesBySchema(event.target.checked)
+                          updateSetting(setting.id, event.target.checked)
                         }
                         className="h-4 w-4 accent-accent"
                       />

@@ -47,6 +47,10 @@ export function QueryResultsTable({ result }: QueryResultsTableProps) {
   );
   const hasData = visibleResultSets.length > 0;
   const hasMessages = result.messages.length > 0;
+  const errorMessageKey = result.messages
+    .filter((message) => message.severity === "error")
+    .map((message) => `${message.lineNumber ?? ""}:${message.text}`)
+    .join("\n");
   const [activeResultSetIndex, setActiveResultSetIndex] = useState(0);
 
   // Default tab: Results if we have data, otherwise Messages.
@@ -72,6 +76,12 @@ export function QueryResultsTable({ result }: QueryResultsTableProps) {
       setActiveResultSetIndex(0);
     }
   }, [hasData, hasMessages, activeTab, activeResultSetIndex, visibleResultSets.length]);
+
+  useEffect(() => {
+    if (errorMessageKey) {
+      setActiveTab("messages");
+    }
+  }, [errorMessageKey]);
 
   const activeResultSet =
     visibleResultSets[activeResultSetIndex] ?? visibleResultSets[0];
@@ -263,8 +273,10 @@ export function QueryResultsTable({ result }: QueryResultsTableProps) {
     [copyResultSet, copySelectedCell, copySelectedRow, selectedCell]
   );
 
+  const scrollEndPadding = <div className="h-6 flex-none" aria-hidden="true" />;
+
   return (
-    <div className="flex flex-1 flex-col overflow-hidden">
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
       {/* Tab header — both tabs are clickable when present */}
       <div className="flex border-b border-bg-tertiary bg-bg-secondary text-xs">
         <div className="flex min-w-0 flex-1">
@@ -346,7 +358,7 @@ export function QueryResultsTable({ result }: QueryResultsTableProps) {
       {activeTab === "results" && activeResultSet && (
         <div
           ref={gridRef}
-          className="flex-1 overflow-auto focus:outline-none"
+          className="min-h-0 flex-1 overflow-auto focus:outline-none"
           tabIndex={0}
           role="grid"
           aria-label="Query results"
@@ -409,6 +421,7 @@ export function QueryResultsTable({ result }: QueryResultsTableProps) {
               {activeResultSet.totalRows.toLocaleString()} rows.
             </div>
           )}
+          {scrollEndPadding}
         </div>
       )}
 
@@ -423,7 +436,7 @@ export function QueryResultsTable({ result }: QueryResultsTableProps) {
 
       {/* Messages */}
       {activeTab === "messages" && hasMessages && (
-        <div className="flex-1 overflow-auto p-2">
+        <div className="min-h-0 flex-1 overflow-auto p-2">
           {result.messages.map((msg, i) => (
             <div
               key={i}
@@ -441,6 +454,7 @@ export function QueryResultsTable({ result }: QueryResultsTableProps) {
               {msg.text}
             </div>
           ))}
+          {scrollEndPadding}
         </div>
       )}
     </div>

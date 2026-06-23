@@ -7,6 +7,7 @@ const SETTINGS_STORAGE_KEY = "ssmsx.settings";
 interface SettingsState {
   settings: AppSettings;
   setGroupTablesBySchema: (value: boolean) => void;
+  setPersistQueryTabs: (value: boolean) => void;
 }
 
 function loadSettings(): AppSettings {
@@ -22,6 +23,11 @@ function loadSettings(): AppSettings {
         groupTablesBySchema:
           parsed.explorer?.groupTablesBySchema ??
           defaultSettings.explorer.groupTablesBySchema,
+      },
+      workspace: {
+        persistQueryTabs:
+          parsed.workspace?.persistQueryTabs ??
+          defaultSettings.workspace.persistQueryTabs,
       },
     };
   } catch {
@@ -47,6 +53,19 @@ export const useSettingsStore = create<SettingsState>((set) => ({
         explorer: {
           ...state.settings.explorer,
           groupTablesBySchema: value,
+        },
+      };
+      saveSettings(settings);
+      return { settings };
+    }),
+
+  setPersistQueryTabs: (value) =>
+    set((state) => {
+      const settings: AppSettings = {
+        ...state.settings,
+        workspace: {
+          ...state.settings.workspace,
+          persistQueryTabs: value,
         },
       };
       saveSettings(settings);

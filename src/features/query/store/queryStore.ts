@@ -14,12 +14,23 @@ import {
   intellisenseGetMetadata,
   type IntelliSenseMetadata,
 } from "../api/queryApi";
+import { useConnectionStore } from "../../connection/store/connectionStore";
+
+const QUERY_SESSION_STORAGE_KEY = "ssmsx.querySession.v1";
 
 interface TabExecutionInfo {
   state: QueryExecutionState;
   queryId: string | null;
   requestId: string | null;
   startTime: number | null;
+}
+
+interface SavedQuerySession {
+  version: 1;
+  tabs: QueryTab[];
+  tabSql: Record<string, string>;
+  activeTabId: string | null;
+  savedAt: string;
 }
 
 interface QueryState {
@@ -39,6 +50,9 @@ interface QueryState {
   closeOtherTabs: (tabId: string) => void;
   closeAllTabs: () => void;
   updateTab: (tabId: string, patch: Partial<QueryTab>) => void;
+  saveSession: () => void;
+  restoreSavedSession: () => boolean;
+  discardSavedSession: () => void;
 
   // Query execution
   executeQuery: (tabId: string, sql?: string) => Promise<void>;
@@ -109,6 +123,75 @@ function flattenFirstResultSet(resultSets: QueryResultSet[]): Pick<QueryResult, 
     rows: first?.rows ?? [],
     totalRows: first?.totalRows ?? 0,
   };
+}
+
+function canUseLocalStorage(): boolean {
+  return typeof window !== "undefined" && typeof window.localStorage !== "undefined";
+}
+
+function readSavedSession(): SavedQuerySession | null {
+  if (!canUseLocalStorage()) return null;
+
+  try {
+    const raw = window.localStorage.getItem(QUERY_SESSION_STORAGE_KEY);
+    if (!raw) return null;
+
+    const parsed = JSON.parse(raw) as Partial<SavedQuerySession>;
+    if (
+      parsed.version !== 1 ||
+      !Array.isArray(parsed.tabs) ||
+      typeof parsed.tabSql !== "object" ||
+      parsed.tabSql == null
+    ) {
+      return null;
+    }
+
+    return {
+      version: 1,
+      tabs: parsed.tabs.filter(isRestorableTab),
+      tabSql: sanitizeTabSql(parsed.tabSql),
+      activeTabId: typeof parsed.activeTabId === "string" ? parsed.activeTabId : null,
+      savedAt: typeof parsed.savedAt === "string" ? parsed.savedAt : "",
+    };
+  } catch (e) {
+    console.warn("Failed to read saved query session:", e);
+    return null;
+  }
+}
+
+function isRestorableTab(tab: unknown): tab is QueryTab {
+  if (typeof tab !== "object" || tab == null) return false;
+  const candidate = tab as Partial<QueryTab>;
+  return (
+    typeof candidate.id === "string" &&
+    (typeof candidate.connectionId === "string" ||
+      candidate.connectionId == null) &&
+    typeof candidate.database === "string" &&
+    typeof candidate.title === "string" &&
+    (candidate.kind == null ||
+      candidate.kind === "query" ||
+      candidate.kind === "diagram")
+  );
+}
+
+function sanitizeTabSql(tabSql: object): Record<string, string> {
+  return Object.fromEntries(
+    Object.entries(tabSql).filter(
+      (entry): entry is [string, string] =>
+        typeof entry[0] === "string" && typeof entry[1] === "string"
+    )
+  );
+}
+
+function buildSavedTabs(tabs: QueryTab[], tabSql: Record<string, string>): QueryTab[] {
+  return tabs.map((tab) =>
+    tab.kind === "diagram"
+      ? tab
+      : {
+          ...tab,
+          initialSql: tabSql[tab.id] ?? tab.initialSql ?? "",
+        }
+  );
 }
 
 export const useQueryStore = create<QueryState>((set, get) => ({
@@ -205,6 +288,69 @@ export const useQueryStore = create<QueryState>((set, get) => ({
       results: {},
     }),
 
+  saveSession: () => {
+    if (!canUseLocalStorage()) return;
+
+    const state = get();
+    if (state.tabs.length === 0) {
+      window.localStorage.removeItem(QUERY_SESSION_STORAGE_KEY);
+      return;
+    }
+
+    const tabSql = Object.fromEntries(
+      Object.entries(state.tabSql).filter(([tabId]) =>
+        state.tabs.some((tab) => tab.id === tabId)
+      )
+    );
+
+    const session: SavedQuerySession = {
+      version: 1,
+      tabs: buildSavedTabs(state.tabs, tabSql),
+      tabSql,
+      activeTabId: state.activeTabId,
+      savedAt: new Date().toISOString(),
+    };
+
+    try {
+      window.localStorage.setItem(QUERY_SESSION_STORAGE_KEY, JSON.stringify(session));
+    } catch (e) {
+      console.warn("Failed to save query session:", e);
+    }
+  },
+
+  restoreSavedSession: () => {
+    const session = readSavedSession();
+    if (!session || session.tabs.length === 0) {
+      return false;
+    }
+
+    const tabIds = new Set(session.tabs.map((tab) => tab.id));
+    const activeTabId =
+      session.activeTabId && tabIds.has(session.activeTabId)
+        ? session.activeTabId
+        : session.tabs[0].id;
+    const tabSql = Object.fromEntries(
+      session.tabs
+        .filter((tab) => tab.kind !== "diagram")
+        .map((tab) => [tab.id, session.tabSql[tab.id] ?? tab.initialSql ?? ""])
+    );
+
+    set({
+      tabs: buildSavedTabs(session.tabs, tabSql),
+      activeTabId,
+      tabSql,
+      executionInfo: {},
+      results: {},
+    });
+
+    return true;
+  },
+
+  discardSavedSession: () => {
+    if (!canUseLocalStorage()) return;
+    window.localStorage.removeItem(QUERY_SESSION_STORAGE_KEY);
+  },
+
   executeQuery: async (tabId, sql) => {
     const state = get();
     const tab = state.tabs.find((t) => t.id === tabId);
@@ -213,6 +359,84 @@ export const useQueryStore = create<QueryState>((set, get) => ({
       return;
     }
     if (tab.kind === "diagram") {
+      return;
+    }
+    if (!tab.connectionId) {
+      set((s) => ({
+        executionInfo: {
+          ...s.executionInfo,
+          [tabId]: {
+            state: "failed",
+            queryId: null,
+            requestId: null,
+            startTime: null,
+          },
+        },
+        results: {
+          ...s.results,
+          [tabId]: {
+            ...emptyResult(),
+            messages: [
+              {
+                text: "Choose a connection before executing this query.",
+                severity: "error" as const,
+              },
+            ],
+          },
+        },
+      }));
+      return;
+    }
+    if (!useConnectionStore.getState().activeConnectionIds.includes(tab.connectionId)) {
+      set((s) => ({
+        executionInfo: {
+          ...s.executionInfo,
+          [tabId]: {
+            state: "failed",
+            queryId: null,
+            requestId: null,
+            startTime: null,
+          },
+        },
+        results: {
+          ...s.results,
+          [tabId]: {
+            ...emptyResult(),
+            messages: [
+              {
+                text: "Connect the selected connection before executing this query.",
+                severity: "error" as const,
+              },
+            ],
+          },
+        },
+      }));
+      return;
+    }
+    if (!tab.database.trim()) {
+      set((s) => ({
+        executionInfo: {
+          ...s.executionInfo,
+          [tabId]: {
+            state: "failed",
+            queryId: null,
+            requestId: null,
+            startTime: null,
+          },
+        },
+        results: {
+          ...s.results,
+          [tabId]: {
+            ...emptyResult(),
+            messages: [
+              {
+                text: "Choose a database before executing this query.",
+                severity: "error" as const,
+              },
+            ],
+          },
+        },
+      }));
       return;
     }
 

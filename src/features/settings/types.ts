@@ -14,4 +14,7 @@ export interface AppSettings {
   explorer: {
     groupTablesBySchema: boolean;
   };
+  workspace: {
+    persistQueryTabs: boolean;
+  };
 }

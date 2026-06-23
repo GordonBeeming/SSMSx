@@ -10,6 +10,8 @@ import { QueryEditor } from "./QueryEditor";
 import { QueryToolbar } from "./QueryToolbar";
 import { QueryStatusBar } from "./QueryStatusBar";
 import { QueryResultsTable } from "./QueryResultsTable";
+import { QueryTargetBar } from "./QueryTargetBar";
+import { useConnectionStore } from "../../connection";
 import type { IntelliSenseMetadata } from "../api/queryApi";
 
 const DEFAULT_RESULTS_HEIGHT_PERCENT = 50;
@@ -26,6 +28,7 @@ function clampResultsHeight(value: number): number {
 export function QueryPanel() {
   const { activeTabId, tabs, tabSql, updateSql, executeQuery, cancelQuery, results, loadIntelliSense } =
     useQueryStore();
+  const activeConnectionIds = useConnectionStore((s) => s.activeConnectionIds);
 
   const activeTab = tabs.find((t) => t.id === activeTabId);
   const activeSql = activeTabId ? tabSql[activeTabId] ?? "" : "";
@@ -40,7 +43,12 @@ export function QueryPanel() {
     useState<IntelliSenseMetadata | null>(null);
 
   useEffect(() => {
-    if (!activeTab) {
+    if (
+      !activeTab ||
+      !activeTab.connectionId ||
+      !activeTab.database ||
+      !activeConnectionIds.includes(activeTab.connectionId)
+    ) {
       setIntellisenseMetadata(null);
       return;
     }
@@ -57,7 +65,7 @@ export function QueryPanel() {
     return () => {
       cancelled = true;
     };
-  }, [activeTab?.connectionId, activeTab?.database, loadIntelliSense]);
+  }, [activeConnectionIds, activeTab?.connectionId, activeTab?.database, loadIntelliSense]);
 
   // Note: Tauri event listeners are registered once at app startup in main.tsx
   // (via initQueryEventListeners) — not here — to avoid React strict mode
@@ -73,12 +81,11 @@ export function QueryPanel() {
   );
 
   const handleExecute = useCallback(() => {
-    if (activeTabId) {
-      executeQuery(activeTabId);
-    }
-  }, [activeTabId, executeQuery]);
+    // The editor owns selection state, so route toolbar execution through it.
+    window.dispatchEvent(new CustomEvent("query:execute"));
+  }, []);
 
-  const handleExecuteSelection = useCallback(
+  const handleExecuteSql = useCallback(
     (sql: string) => {
       if (activeTabId) {
         executeQuery(activeTabId, sql);
@@ -86,12 +93,6 @@ export function QueryPanel() {
     },
     [activeTabId, executeQuery]
   );
-
-  // For toolbar "Execute Selection" button (no sql param — triggers via the editor ref)
-  const handleExecuteSelectionFromToolbar = useCallback(() => {
-    // Dispatch a custom event the editor can pick up to execute the current selection
-    window.dispatchEvent(new CustomEvent("query:execute-selection"));
-  }, []);
 
   const handleCancel = useCallback(() => {
     if (activeTabId) {
@@ -152,9 +153,9 @@ export function QueryPanel() {
       <QueryToolbar
         tabId={activeTabId}
         onExecute={handleExecute}
-        onExecuteSelection={handleExecuteSelectionFromToolbar}
         onCancel={handleCancel}
       />
+      <QueryTargetBar tabId={activeTabId} />
 
       <div ref={splitContainerRef} className="flex min-h-0 flex-1 flex-col overflow-hidden">
         {/* Editor area */}
@@ -169,8 +170,7 @@ export function QueryPanel() {
           <QueryEditor
             value={activeSql}
             onChange={handleChange}
-            onExecute={handleExecute}
-            onExecuteSelection={handleExecuteSelection}
+            onExecute={handleExecuteSql}
             intellisenseMetadata={intellisenseMetadata}
           />
         </div>
