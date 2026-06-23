@@ -1,0 +1,55 @@
+<!-- @dsCard group="Components" viewport="700x220" name="Context menu" subtitle="The floating right-click menu — actions, separators, danger items" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<link rel="stylesheet" href="../../styles.css" />
+<style>
+  body { margin: 0; font-family: var(--font-ui); background: var(--surface-panel); padding: 24px; }
+  .wrap { display: flex; gap: 40px; }
+  .col { position: relative; width: 170px; height: 160px; }
+  .lbl { font-size: var(--text-2xs); letter-spacing: var(--tracking-wider); text-transform: uppercase; color: var(--text-secondary); margin-bottom: 10px; }
+</style>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="../../_ds_bundle.js"></script>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+  const { ContextMenu } = window.SSMSXDesignSystem_453330;
+  function Demo() {
+    return (
+      <div>
+        <div className="lbl">Right-click menu (explorer / connections / tabs)</div>
+        <div className="wrap">
+          <div className="col">
+            <ContextMenu x={0} y={0} onClose={() => {}} style={{ position: "absolute" }}
+              items={[
+                { label: "New Query", onClick(){} },
+                { label: "Open Table", onClick(){} },
+                { label: "Script as CREATE", onClick(){} },
+                { separator: true },
+                { label: "Refresh", onClick(){} },
+                { label: "Delete", danger: true, onClick(){} },
+              ]} />
+          </div>
+          <div className="col">
+            <ContextMenu x={0} y={0} onClose={() => {}} style={{ position: "absolute" }}
+              items={[
+                { label: "Connect", onClick(){} },
+                { label: "Edit", onClick(){} },
+                { label: "Disabled", disabled: true, onClick(){} },
+                { separator: true },
+                { label: "Delete", danger: true, onClick(){} },
+              ]} />
+          </div>
+        </div>
+      </div>
+    );
+  }
+  ReactDOM.createRoot(document.getElementById("root")).render(<Demo/>);
+</script>
+</body>
+</html>

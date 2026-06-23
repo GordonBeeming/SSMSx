@@ -30,7 +30,7 @@ export function ConnectionDialog() {
     <dialog
       ref={dialogRef}
       onCancel={closeDialog}
-      className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 m-0 w-[700px] max-w-[90vw] rounded-lg border border-bg-tertiary bg-bg-primary p-0 text-text-primary shadow-xl backdrop:bg-black/50"
+      className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 m-0 w-[780px] max-w-[94vw] rounded-lg border border-bg-tertiary bg-bg-primary p-0 text-text-primary shadow-xl backdrop:bg-black/50"
     >
       <div className="flex h-[500px] max-h-[80vh] flex-col">
         {/* Header */}
@@ -49,7 +49,7 @@ export function ConnectionDialog() {
         {/* Body */}
         <div className="flex min-h-0 flex-1">
           {/* Left: Recent connections */}
-          <div className="w-[220px] shrink-0 overflow-y-auto border-r border-bg-tertiary p-3">
+          <div className="w-[280px] shrink-0 overflow-y-auto border-r border-bg-tertiary p-3">
             <h3 className="mb-2 text-xs font-medium uppercase tracking-wide text-text-secondary">
               Recent
             </h3>

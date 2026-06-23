@@ -2,6 +2,10 @@ import { useState, useEffect } from "react";
 import type { ConnectionInfo } from "../types";
 import { isAuthType, isEncryptMode } from "../types";
 import { useConnectionStore } from "../store/connectionStore";
+import {
+  CONNECTION_CANCELLED_MESSAGE,
+  isConnectionCancellation,
+} from "../utils/connectionResult";
 
 const DEFAULT_CONNECTION: Omit<ConnectionInfo, "id" | "createdAt"> = {
   name: "",
@@ -19,10 +23,12 @@ export function PropertiesTab() {
     selectedConnection,
     selectionVersion,
     loading,
+    activeOperation,
     testResult,
     saveConnection,
     testConnection,
     connect,
+    cancelConnectionAttempt,
     setFormDirty,
   } = useConnectionStore();
 
@@ -33,6 +39,10 @@ export function PropertiesTab() {
   const [isDirtyIdentity, setIsDirtyIdentity] = useState(false);
 
   const hasStoredPassword = !!form.credentialRef;
+  const isCancelled =
+    !!testResult &&
+    !testResult.success &&
+    isConnectionCancellation(testResult.error);
 
   useEffect(() => {
     if (selectedConnection) {
@@ -291,28 +301,41 @@ export function PropertiesTab() {
             className={`mb-3 rounded px-3 py-2 text-sm ${
               testResult.success
                 ? "bg-success/10 text-success"
+                : isCancelled
+                  ? "bg-warning/10 text-warning"
                 : "bg-error/10 text-error"
             }`}
           >
             {testResult.success
               ? "Connection successful!"
+              : isCancelled
+                ? CONNECTION_CANCELLED_MESSAGE
               : `Connection failed: ${testResult.error}`}
           </div>
         )}
         <div className="flex justify-end gap-2">
+          {loading && activeOperation && (
+            <button
+              type="button"
+              onClick={cancelConnectionAttempt}
+              className="rounded border border-bg-tertiary bg-bg-primary px-4 py-1.5 text-sm text-text-primary hover:bg-bg-secondary"
+            >
+              Cancel
+            </button>
+          )}
           <button
             onClick={handleTest}
             disabled={loading || !form.serverName}
             className="rounded border border-bg-tertiary bg-bg-secondary px-4 py-1.5 text-sm text-text-primary hover:bg-bg-tertiary disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {loading ? "Testing..." : "Test Connection"}
+            {activeOperation === "test" ? "Testing..." : "Test Connection"}
           </button>
           <button
             onClick={handleConnect}
             disabled={loading || !form.serverName}
             className="rounded bg-accent px-4 py-1.5 text-sm text-accent-text hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {loading ? "Connecting..." : "Connect"}
+            {activeOperation === "connect" ? "Connecting..." : "Connect"}
           </button>
         </div>
       </div>

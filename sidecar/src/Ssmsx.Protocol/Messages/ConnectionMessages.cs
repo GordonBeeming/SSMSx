@@ -48,6 +48,12 @@ public record ConnectionDisconnectParams
     public required string Id { get; init; }
 }
 
+public record RequestCancelParams
+{
+    [JsonPropertyName("requestId")]
+    public required string RequestId { get; init; }
+}
+
 public record ConnectionTestResult
 {
     [JsonPropertyName("success")]

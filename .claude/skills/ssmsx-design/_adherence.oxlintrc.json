@@ -1,0 +1,304 @@
+{
+  "plugins": [
+    "react",
+    "import"
+  ],
+  "rules": {
+    "react/forbid-elements": [
+      "warn",
+      {
+        "forbid": []
+      }
+    ],
+    "no-restricted-imports": [
+      "warn",
+      {
+        "patterns": [
+          {
+            "group": [
+              "components/core/**",
+              "components/data/**",
+              "components/explorer/**",
+              "components/navigation/**",
+              "components/overlay/**",
+              "ui_kits/ssmsx-desktop/**"
+            ],
+            "message": "Import design-system components from 'index.js', not component internals."
+          }
+        ]
+      }
+    ],
+    "no-restricted-syntax": [
+      "warn",
+      {
+        "selector": "Literal[value=/#[0-9a-fA-F]{3,8}\\b/]",
+        "message": "Raw hex color — use a design-system color token via var()."
+      },
+      {
+        "selector": "Literal[value=/\\b\\d+px\\b/]",
+        "message": "Raw px value — use a design-system spacing token via var()."
+      },
+      {
+        "selector": "JSXOpeningElement[name.name='Badge'] > JSXAttribute > JSXIdentifier[name!=/^(?:tone|children|key|ref|className|style|children)$/]",
+        "message": "<Badge> doesn't accept that prop. Declared props: tone, children."
+      },
+      {
+        "selector": "JSXOpeningElement[name.name='Button'] > JSXAttribute > JSXIdentifier[name!=/^(?:variant|size|leadingIcon|children|key|ref|className|style|children)$/]",
+        "message": "<Button> doesn't accept that prop. Declared props: variant, size, leadingIcon, children."
+      },
+      {
+        "selector": "JSXOpeningElement[name.name='ConnectionItem'] > JSXAttribute > JSXIdentifier[name!=/^(?:name|serverName|database|username|authType|color|selected|onClick|onDoubleClick|style|key|ref|className|style|children)$/]",
+        "message": "<ConnectionItem> doesn't accept that prop. Declared props: name, serverName, database, username, authType, color, selected, onClick, onDoubleClick, style."
+      },
+      {
+        "selector": "JSXOpeningElement[name.name='ContextMenuItem'] > JSXAttribute > JSXIdentifier[name!=/^(?:label|onClick|danger|disabled|separator|key|ref|className|style|children)$/]",
+        "message": "<ContextMenuItem> doesn't accept that prop. Declared props: label, onClick, danger, disabled, separator."
+      },
+      {
+        "selector": "JSXOpeningElement[name.name='Input'] > JSXAttribute > JSXIdentifier[name!=/^(?:size|key|ref|className|style|children)$/]",
+        "message": "<Input> doesn't accept that prop. Declared props: size."
+      },
+      {
+        "selector": "JSXOpeningElement[name.name='Input'] > JSXAttribute[name.name='size'] > Literal[value!=/^(?:sm|md)$/]",
+        "message": "<Input> size must be one of 'sm' | 'md'."
+      },
+      {
+        "selector": "JSXOpeningElement[name.name='NodeIcon'] > JSXAttribute > JSXIdentifier[name!=/^(?:type|folderKind|size|style|key|ref|className|style|children)$/]",
+        "message": "<NodeIcon> doesn't accept that prop. Declared props: type, folderKind, size, style."
+      },
+      {
+        "selector": "JSXOpeningElement[name.name='QueryTab'] > JSXAttribute > JSXIdentifier[name!=/^(?:title|database|kind|active|dirty|color|onSelect|onClose|style|key|ref|className|style|children)$/]",
+        "message": "<QueryTab> doesn't accept that prop. Declared props: title, database, kind, active, dirty, color, onSelect, onClose, style."
+      },
+      {
+        "selector": "JSXOpeningElement[name.name='QueryTab'] > JSXAttribute[name.name='kind'] > Literal[value!=/^(?:query|diagram)$/]",
+        "message": "<QueryTab> kind must be one of 'query' | 'diagram'."
+      },
+      {
+        "selector": "JSXOpeningElement[name.name='TreeRow'] > JSXAttribute > JSXIdentifier[name!=/^(?:type|label|depth|expanded|hasChildren|loading|selected|color|onToggle|onSelect|style|key|ref|className|style|children)$/]",
+        "message": "<TreeRow> doesn't accept that prop. Declared props: type, label, depth, expanded, hasChildren, loading, selected, color, onToggle, onSelect, style."
+      }
+    ]
+  },
+  "overrides": [
+    {
+      "files": [
+        "**/index.js"
+      ],
+      "rules": {
+        "no-restricted-imports": "off"
+      }
+    }
+  ],
+  "x-omelette": {
+    "components": {
+      "Badge": {
+        "replaces": []
+      },
+      "Button": {
+        "replaces": []
+      },
+      "ConnectionItem": {
+        "replaces": []
+      },
+      "ContextMenuItem": {
+        "replaces": []
+      },
+      "Input": {
+        "replaces": []
+      },
+      "NodeIcon": {
+        "replaces": []
+      },
+      "QueryTab": {
+        "replaces": []
+      },
+      "TreeRow": {
+        "replaces": []
+      }
+    },
+    "tokens": [
+      "--accent",
+      "--accent-hover",
+      "--accent-selected",
+      "--accent-text",
+      "--amber-700",
+      "--blue-500",
+      "--blue-600",
+      "--border-default",
+      "--border-strong",
+      "--border-width",
+      "--conn-amber",
+      "--conn-blue",
+      "--conn-green",
+      "--conn-red",
+      "--conn-slate",
+      "--conn-violet",
+      "--duration-base",
+      "--duration-fast",
+      "--ease-out",
+      "--ease-standard",
+      "--explorer-width",
+      "--focus-ring",
+      "--font-mono",
+      "--font-ui",
+      "--gray-100",
+      "--gray-200",
+      "--gray-50",
+      "--green-400",
+      "--green-600",
+      "--ink-600",
+      "--ink-900",
+      "--leading-normal",
+      "--leading-snug",
+      "--leading-tight",
+      "--pad-control-x",
+      "--pad-control-y",
+      "--pad-dialog",
+      "--pad-row-y",
+      "--pad-toolbar",
+      "--radius-full",
+      "--radius-lg",
+      "--radius-md",
+      "--radius-sm",
+      "--radius-xs",
+      "--red-600",
+      "--row-height",
+      "--shadow-lg",
+      "--shadow-md",
+      "--shadow-sm",
+      "--space-0",
+      "--space-0_5",
+      "--space-1",
+      "--space-10",
+      "--space-1_5",
+      "--space-2",
+      "--space-2_5",
+      "--space-3",
+      "--space-4",
+      "--space-5",
+      "--space-6",
+      "--space-8",
+      "--space-px",
+      "--status-error",
+      "--status-error-soft",
+      "--status-online",
+      "--status-success",
+      "--status-warning",
+      "--surface-app",
+      "--surface-input",
+      "--surface-overlay",
+      "--surface-panel",
+      "--surface-raised",
+      "--tab-max-width",
+      "--text-2xs",
+      "--text-base",
+      "--text-lg",
+      "--text-on-accent",
+      "--text-primary",
+      "--text-secondary",
+      "--text-sm",
+      "--text-xs",
+      "--tracking-wide",
+      "--tracking-wider",
+      "--tree-indent",
+      "--weight-bold",
+      "--weight-medium",
+      "--weight-normal",
+      "--weight-semibold",
+      "--white"
+    ],
+    "tokenKinds": {
+      "--gray-50": "color",
+      "--gray-100": "color",
+      "--gray-200": "color",
+      "--white": "color",
+      "--ink-900": "color",
+      "--ink-600": "color",
+      "--blue-600": "color",
+      "--blue-500": "color",
+      "--red-600": "color",
+      "--green-600": "color",
+      "--amber-700": "color",
+      "--green-400": "color",
+      "--surface-app": "color",
+      "--surface-panel": "color",
+      "--surface-raised": "color",
+      "--surface-input": "color",
+      "--surface-overlay": "color",
+      "--text-primary": "font",
+      "--text-secondary": "font",
+      "--text-on-accent": "font",
+      "--border-default": "color",
+      "--border-strong": "color",
+      "--accent": "color",
+      "--accent-hover": "color",
+      "--accent-text": "font",
+      "--accent-selected": "color",
+      "--status-error": "color",
+      "--status-success": "color",
+      "--status-warning": "color",
+      "--status-online": "color",
+      "--status-error-soft": "color",
+      "--conn-blue": "color",
+      "--conn-green": "color",
+      "--conn-amber": "color",
+      "--conn-red": "color",
+      "--conn-violet": "color",
+      "--conn-slate": "color",
+      "--font-ui": "font",
+      "--font-mono": "font",
+      "--text-2xs": "font",
+      "--text-xs": "font",
+      "--text-sm": "font",
+      "--text-base": "font",
+      "--text-lg": "font",
+      "--weight-normal": "font",
+      "--weight-medium": "font",
+      "--weight-semibold": "font",
+      "--weight-bold": "font",
+      "--leading-tight": "font",
+      "--leading-snug": "font",
+      "--leading-normal": "font",
+      "--tracking-wide": "font",
+      "--tracking-wider": "font",
+      "--space-0": "spacing",
+      "--space-px": "spacing",
+      "--space-0_5": "spacing",
+      "--space-1": "spacing",
+      "--space-1_5": "spacing",
+      "--space-2": "spacing",
+      "--space-2_5": "spacing",
+      "--space-3": "spacing",
+      "--space-4": "spacing",
+      "--space-5": "spacing",
+      "--space-6": "spacing",
+      "--space-8": "spacing",
+      "--space-10": "spacing",
+      "--pad-row-y": "spacing",
+      "--pad-toolbar": "spacing",
+      "--pad-control-x": "spacing",
+      "--pad-control-y": "spacing",
+      "--pad-dialog": "spacing",
+      "--explorer-width": "spacing",
+      "--tree-indent": "spacing",
+      "--row-height": "spacing",
+      "--tab-max-width": "spacing",
+      "--radius-xs": "radius",
+      "--radius-sm": "radius",
+      "--radius-md": "radius",
+      "--radius-lg": "radius",
+      "--radius-full": "radius",
+      "--border-width": "spacing",
+      "--shadow-sm": "shadow",
+      "--shadow-md": "shadow",
+      "--shadow-lg": "shadow",
+      "--focus-ring": "color",
+      "--duration-fast": "other",
+      "--duration-base": "other",
+      "--ease-standard": "other",
+      "--ease-out": "other"
+    },
+    "fontFamilies": []
+  }
+}

@@ -1,0 +1,27 @@
+<!-- @dsCard group="Spacing" viewport="700x150" name="Spacing scale" subtitle="4px base grid — common values live small for density" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<link rel="stylesheet" href="../styles.css" />
+<style>
+  body { margin: 0; font-family: var(--font-ui); background: #fff; padding: 20px; }
+  .row { display: flex; align-items: flex-end; gap: 18px; }
+  .item { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+  .bar { background: var(--accent); border-radius: 2px; width: 16px; }
+  .tag { font-family: var(--font-mono); font-size: 10px; color: var(--text-secondary); }
+</style>
+</head>
+<body>
+  <div class="row">
+    <div class="item"><div class="bar" style="height:4px"></div><div class="tag">1·4</div></div>
+    <div class="item"><div class="bar" style="height:8px"></div><div class="tag">2·8</div></div>
+    <div class="item"><div class="bar" style="height:12px"></div><div class="tag">3·12</div></div>
+    <div class="item"><div class="bar" style="height:16px"></div><div class="tag">4·16</div></div>
+    <div class="item"><div class="bar" style="height:20px"></div><div class="tag">5·20</div></div>
+    <div class="item"><div class="bar" style="height:24px"></div><div class="tag">6·24</div></div>
+    <div class="item"><div class="bar" style="height:32px"></div><div class="tag">8·32</div></div>
+    <div class="item"><div class="bar" style="height:40px"></div><div class="tag">10·40</div></div>
+  </div>
+</body>
+</html>

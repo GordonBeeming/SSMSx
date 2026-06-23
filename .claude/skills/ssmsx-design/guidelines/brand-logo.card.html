@@ -1,0 +1,24 @@
+<!-- @dsCard group="Brand" viewport="700x180" name="Logo & wordmark" subtitle="App mark, monochrome mark, and the SSMSX lockup" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<link rel="stylesheet" href="../styles.css" />
+<style>
+  body { margin: 0; font-family: var(--font-ui); background: #fff; padding: 24px; }
+  .row { display: flex; align-items: center; gap: 40px; }
+  .item { display: flex; flex-direction: column; align-items: center; gap: 10px; font-size: 10px; color: var(--text-secondary); }
+  .dark { background: #15171a; border-radius: var(--radius-md); padding: 16px; }
+  img.mark { width: 84px; height: 84px; border-radius: 19px; }
+  .mono { color: var(--accent); }
+</style>
+</head>
+<body>
+  <div class="row">
+    <div class="item"><img class="mark" src="../assets/icon.svg" alt="SSMSX icon" />icon.svg</div>
+    <div class="item"><div class="dark"><img class="mark" src="../assets/icon.svg" alt="SSMSX on dark" style="border-radius:19px" /></div>on dark</div>
+    <div class="item mono"><img src="../assets/icon-mono.svg" alt="mono" style="width:48px;height:48px" />icon-mono.svg</div>
+    <div class="item"><img src="../assets/logo-lockup.svg" alt="SSMSX lockup" style="height:54px" />logo-lockup.svg</div>
+  </div>
+</body>
+</html>

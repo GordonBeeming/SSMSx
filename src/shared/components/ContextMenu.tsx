@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 export type ContextMenuItem =
   | { type: "action"; label: string; onClick: () => void; danger?: boolean; disabled?: boolean }
@@ -14,6 +14,25 @@ interface ContextMenuProps {
 
 export function ContextMenu({ x, y, items, onClose }: ContextMenuProps) {
   const ref = useRef<HTMLDivElement>(null);
+  const [position, setPosition] = useState({ x, y });
+
+  useLayoutEffect(() => {
+    const menu = ref.current;
+    if (!menu) return;
+
+    const margin = 8;
+    const rect = menu.getBoundingClientRect();
+    const nextPosition = {
+      x: Math.max(margin, Math.min(x, window.innerWidth - rect.width - margin)),
+      y: Math.max(margin, Math.min(y, window.innerHeight - rect.height - margin)),
+    };
+    setPosition((current) => {
+      if (current.x === nextPosition.x && current.y === nextPosition.y) {
+        return current;
+      }
+      return nextPosition;
+    });
+  }, [x, y]);
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -29,7 +48,7 @@ export function ContextMenu({ x, y, items, onClose }: ContextMenuProps) {
     <div
       ref={ref}
       className="fixed z-50 min-w-[140px] rounded border border-bg-tertiary bg-bg-secondary shadow-lg"
-      style={{ left: x, top: y }}
+      style={{ left: position.x, top: position.y }}
     >
       <ContextMenuItems items={items} onClose={onClose} />
     </div>

@@ -23,7 +23,7 @@ function App() {
     <div className="flex h-screen flex-col">
       {/* Toolbar */}
       <div className="flex items-center gap-3 border-b border-bg-tertiary bg-bg-secondary px-4 py-2">
-        <h1 className="text-sm font-bold tracking-wide">SSMSX</h1>
+        <h1 className="text-sm font-bold tracking-wide">SSMSx</h1>
         <div className="flex-1" />
 
         {activeConnections.length > 0 && (

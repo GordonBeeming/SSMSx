@@ -3,14 +3,12 @@ import { useQueryStore } from "../store/queryStore";
 interface QueryToolbarProps {
   tabId: string;
   onExecute: () => void;
-  onExecuteSelection: () => void;
   onCancel: () => void;
 }
 
 export function QueryToolbar({
   tabId,
   onExecute,
-  onExecuteSelection,
   onCancel,
 }: QueryToolbarProps) {
   const executionInfo = useQueryStore((s) => s.executionInfo[tabId]);
@@ -27,21 +25,10 @@ export function QueryToolbar({
         onClick={onExecute}
         disabled={isExecuting}
         className="flex items-center gap-1 rounded px-2 py-0.5 text-xs text-text-primary hover:bg-bg-tertiary disabled:cursor-not-allowed disabled:opacity-50"
-        title="Execute (F5)"
+        title="Execute selected SQL, or all SQL if nothing is selected (F5)"
       >
         <span className="text-success">&#9654;</span>
         Execute
-      </button>
-
-      {/* Execute Selection */}
-      <button
-        onClick={onExecuteSelection}
-        disabled={isExecuting}
-        className="flex items-center gap-1 rounded px-2 py-0.5 text-xs text-text-primary hover:bg-bg-tertiary disabled:cursor-not-allowed disabled:opacity-50"
-        title={`Execute Selection (${isMac() ? "⌘" : "Ctrl"}+Shift+E)`}
-      >
-        <span className="text-accent">&#9654;&#124;</span>
-        Selection
       </button>
 
       {/* Separator */}
@@ -63,8 +50,4 @@ export function QueryToolbar({
       </button>
     </div>
   );
-}
-
-function isMac(): boolean {
-  return navigator.platform.toUpperCase().includes("MAC");
 }

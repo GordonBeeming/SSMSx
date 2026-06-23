@@ -1,3 +1,4 @@
+using Microsoft.Data.SqlClient;
 using Ssmsx.Core.Connections;
 using Ssmsx.Core.Credentials;
 using Ssmsx.Protocol.Models;
@@ -58,6 +59,27 @@ public class SqlConnectionFactoryTests
 
         await Assert.ThrowsAsync<ArgumentException>(
             () => _factory.CreateAsync(info, store));
+    }
+
+    [Fact]
+    public void BuildEntraMfaConnectionString_UsesSqlClientInteractiveAuthentication()
+    {
+        var info = new ConnectionInfo
+        {
+            ServerName = "demo.database.windows.net",
+            AuthType = AuthType.EntraMfa,
+            Username = "user@example.com",
+            Database = "testdb",
+            Encrypt = EncryptMode.Mandatory
+        };
+
+        var connectionString = SqlConnectionFactory.BuildEntraMfaConnectionString(info);
+
+        var builder = new SqlConnectionStringBuilder(connectionString);
+        Assert.Equal(SqlAuthenticationMethod.ActiveDirectoryInteractive, builder.Authentication);
+        Assert.Equal("user@example.com", builder.UserID);
+        Assert.Equal("testdb", builder.InitialCatalog);
+        Assert.Equal("demo.database.windows.net", builder.DataSource);
     }
 
     private class FakeCredentialStore : ICredentialStore

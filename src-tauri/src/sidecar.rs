@@ -1,11 +1,11 @@
-use std::collections::HashMap;
-use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
-use tokio::sync::{Mutex, oneshot, mpsc};
-use tauri::AppHandle;
-use tauri_plugin_shell::ShellExt;
-use tauri_plugin_shell::process::{CommandChild, CommandEvent};
 use serde_json::Value;
+use std::collections::HashMap;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
+use tauri::AppHandle;
+use tauri_plugin_shell::process::{CommandChild, CommandEvent};
+use tauri_plugin_shell::ShellExt;
+use tokio::sync::{mpsc, oneshot, Mutex};
 
 /// Timeout for sidecar requests in seconds.
 /// Kept at 30s to accommodate slow initial connections while still failing fast for hangs.
@@ -70,15 +70,28 @@ impl SidecarManager {
                                                 .get("message")
                                                 .and_then(|v| v.as_str())
                                                 .unwrap_or("Unknown error");
-                                            log::error!("Streaming request '{}' received error: {}", id, msg);
+                                            log::error!(
+                                                "Streaming request '{}' received error: {}",
+                                                id,
+                                                msg
+                                            );
                                             let _ = sender.send(Err(msg.to_string()));
                                             stream_pending.remove(id);
                                         } else {
-                                            let result = response.get("result").cloned().unwrap_or(Value::Null);
-                                            let done = result.get("done").and_then(|v| v.as_bool()).unwrap_or(false);
+                                            let result = response
+                                                .get("result")
+                                                .cloned()
+                                                .unwrap_or(Value::Null);
+                                            let done = result
+                                                .get("done")
+                                                .and_then(|v| v.as_bool())
+                                                .unwrap_or(false);
                                             let _ = sender.send(Ok(result));
                                             if done {
-                                                log::debug!("Streaming request '{}' completed (done=true)", id);
+                                                log::debug!(
+                                                    "Streaming request '{}' completed (done=true)",
+                                                    id
+                                                );
                                                 stream_pending.remove(id);
                                             }
                                         }
@@ -103,7 +116,11 @@ impl SidecarManager {
                                 }
                             }
                             Err(e) => {
-                                log::error!("Failed to parse sidecar response: {} — line: {}", e, line);
+                                log::error!(
+                                    "Failed to parse sidecar response: {} — line: {}",
+                                    e,
+                                    line
+                                );
                             }
                         }
                     }
@@ -124,7 +141,10 @@ impl SidecarManager {
                         // Drain all pending streaming requests
                         let mut stream_pending = pending_stream.lock().await;
                         for (id, sender) in stream_pending.drain() {
-                            log::warn!("Draining streaming request '{}' due to sidecar termination", id);
+                            log::warn!(
+                                "Draining streaming request '{}' due to sidecar termination",
+                                id
+                            );
                             let _ = sender.send(Err("Sidecar process terminated".to_string()));
                         }
                         break;
@@ -137,20 +157,55 @@ impl SidecarManager {
         Ok(())
     }
 
-    pub async fn send_request(
+    pub async fn send_request(&self, method: &str, params: Option<Value>) -> Result<Value, String> {
+        self.send_request_with_timeout(
+            method,
+            params,
+            uuid::Uuid::new_v4().to_string(),
+            REQUEST_TIMEOUT_SECS,
+        )
+        .await
+    }
+
+    pub async fn send_interactive_request(
         &self,
         method: &str,
         params: Option<Value>,
+        id: String,
     ) -> Result<Value, String> {
-        let id = uuid::Uuid::new_v4().to_string();
+        self.send_request_with_timeout(method, params, id, 300)
+            .await
+    }
 
+    pub async fn cancel_request(&self, request_id: String) -> Result<bool, String> {
+        let result = self
+            .send_request(
+                "request.cancel",
+                Some(serde_json::json!({ "requestId": request_id })),
+            )
+            .await?;
+        result
+            .as_bool()
+            .ok_or_else(|| "Invalid cancel response from sidecar".to_string())
+    }
+
+    async fn send_request_with_timeout(
+        &self,
+        method: &str,
+        params: Option<Value>,
+        id: String,
+        timeout_secs: u64,
+    ) -> Result<Value, String> {
         let request = serde_json::json!({
             "id": id,
             "method": method,
             "params": params
         });
 
-        let request_line = format!("{}\n", serde_json::to_string(&request).map_err(|e| e.to_string())?);
+        let request_line = format!(
+            "{}\n",
+            serde_json::to_string(&request).map_err(|e| e.to_string())?
+        );
 
         let (tx, rx) = oneshot::channel();
 
@@ -192,7 +247,7 @@ impl SidecarManager {
         }
 
         // Wait for response with timeout
-        match tokio::time::timeout(std::time::Duration::from_secs(REQUEST_TIMEOUT_SECS), rx).await {
+        match tokio::time::timeout(std::time::Duration::from_secs(timeout_secs), rx).await {
             Ok(Ok(result)) => result,
             Ok(Err(_)) => Err(format!(
                 "Response channel closed for request '{}' (method: '{}')",
@@ -206,11 +261,11 @@ impl SidecarManager {
                     "Request '{}' for method '{}' timed out after {}s",
                     id,
                     method,
-                    REQUEST_TIMEOUT_SECS
+                    timeout_secs
                 );
                 Err(format!(
                     "Request timed out after {}s for method '{}'",
-                    REQUEST_TIMEOUT_SECS, method
+                    timeout_secs, method
                 ))
             }
         }
@@ -230,16 +285,21 @@ impl SidecarManager {
         params: Option<Value>,
         id: String,
     ) -> Result<(String, mpsc::UnboundedReceiver<Result<Value, String>>), String> {
-
         let request = serde_json::json!({
             "id": id,
             "method": method,
             "params": params
         });
 
-        let request_line = format!("{}\n", serde_json::to_string(&request).map_err(|e| {
-            format!("Failed to serialize streaming request for method '{}': {}", method, e)
-        })?);
+        let request_line = format!(
+            "{}\n",
+            serde_json::to_string(&request).map_err(|e| {
+                format!(
+                    "Failed to serialize streaming request for method '{}': {}",
+                    method, e
+                )
+            })?
+        );
 
         let (tx, rx) = mpsc::unbounded_channel();
 

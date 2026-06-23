@@ -1,0 +1,34 @@
+/* SSMSX — Typography tokens
+   The app ships no custom webfont: it relies on the native OS UI font so it
+   feels like a first-class desktop app on every platform. SQL and result data
+   are rendered in the platform monospace stack. */
+
+:root {
+  /* ---- Families ---- */
+  --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+  /* Code/SQL + result grids + messages. Monaco editor uses its own default;
+     this stack matches the rest of the app's mono surfaces. */
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  /* ---- Sizes (the UI is deliberately compact) ---- */
+  --text-2xs:  11px;  /* badges, auth-type chips, dense metadata */
+  --text-xs:   12px;  /* default body in the app: tree rows, toolbar, grid */
+  --text-sm:   14px;  /* dialog body, connection names, empty-state prompts */
+  --text-base: 16px;  /* dialog headings */
+  --text-lg:   18px;  /* primary empty-state copy */
+
+  /* ---- Weights ---- */
+  --weight-normal:   400;
+  --weight-medium:   500;
+  --weight-semibold: 600;
+  --weight-bold:     700;
+
+  /* ---- Line heights ---- */
+  --leading-tight: 1.25;
+  --leading-snug:  1.4;
+  --leading-normal: 1.5;
+
+  /* ---- Tracking ---- */
+  --tracking-wide:   0.02em;  /* "SSMSX" wordmark, section eyebrows */
+  --tracking-wider:  0.06em;  /* OBJECT EXPLORER-style uppercase labels */
+}

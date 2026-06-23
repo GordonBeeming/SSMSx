@@ -1,0 +1,26 @@
+<!-- @dsCard group="Colors" viewport="700x130" name="Connection color-coding" subtitle="User-assigned dots that tag each connection across the UI" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<link rel="stylesheet" href="../styles.css" />
+<style>
+  body { margin: 0; font-family: var(--font-ui); background: #fff; padding: 22px; }
+  .row { display: flex; gap: 26px; align-items: center; }
+  .item { display: flex; flex-direction: column; align-items: center; gap: 8px; font-size: 10px; color: var(--text-secondary); }
+  .dot { width: 26px; height: 26px; border-radius: var(--radius-full); }
+  .note { margin-top: 16px; font-size: var(--text-xs); color: var(--text-secondary); max-width: 560px; line-height: 1.5; }
+</style>
+</head>
+<body>
+  <div class="row">
+    <div class="item"><div class="dot" style="background:var(--conn-blue)"></div>blue</div>
+    <div class="item"><div class="dot" style="background:var(--conn-green)"></div>green</div>
+    <div class="item"><div class="dot" style="background:var(--conn-amber)"></div>amber</div>
+    <div class="item"><div class="dot" style="background:var(--conn-red)"></div>red</div>
+    <div class="item"><div class="dot" style="background:var(--conn-violet)"></div>violet</div>
+    <div class="item"><div class="dot" style="background:var(--conn-slate)"></div>slate</div>
+  </div>
+  <p class="note">Each saved connection carries a color. The dot follows it everywhere — toolbar, server node, query tabs and the status bar — so a red “prod” tab never gets confused with a green “local” one.</p>
+</body>
+</html>

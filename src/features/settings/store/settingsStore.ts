@@ -1,0 +1,80 @@
+import { create } from "zustand";
+import type { AppSettings } from "../types";
+import { defaultSettings } from "../settingsSchema";
+
+const SETTINGS_STORAGE_KEY = "ssmsx.settings";
+
+interface SettingsState {
+  settings: AppSettings;
+  setGroupTablesBySchema: (value: boolean) => void;
+  setPersistQueryTabs: (value: boolean) => void;
+}
+
+function readBoolean(value: unknown, fallback: boolean): boolean {
+  return typeof value === "boolean" ? value : fallback;
+}
+
+function loadSettings(): AppSettings {
+  try {
+    const storedValue = window.localStorage.getItem(SETTINGS_STORAGE_KEY);
+    if (!storedValue) return defaultSettings;
+
+    const parsed = JSON.parse(storedValue) as Partial<AppSettings> | null;
+    if (!parsed || typeof parsed !== "object") return defaultSettings;
+
+    return {
+      explorer: {
+        groupTablesBySchema: readBoolean(
+          parsed.explorer?.groupTablesBySchema,
+          defaultSettings.explorer.groupTablesBySchema
+        ),
+      },
+      workspace: {
+        persistQueryTabs: readBoolean(
+          parsed.workspace?.persistQueryTabs,
+          defaultSettings.workspace.persistQueryTabs
+        ),
+      },
+    };
+  } catch {
+    return defaultSettings;
+  }
+}
+
+function saveSettings(settings: AppSettings): void {
+  try {
+    window.localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settings));
+  } catch {
+    // Ignore storage failures; preferences should still work for this session.
+  }
+}
+
+export const useSettingsStore = create<SettingsState>((set) => ({
+  settings: loadSettings(),
+
+  setGroupTablesBySchema: (value) =>
+    set((state) => {
+      const settings: AppSettings = {
+        ...state.settings,
+        explorer: {
+          ...state.settings.explorer,
+          groupTablesBySchema: value,
+        },
+      };
+      saveSettings(settings);
+      return { settings };
+    }),
+
+  setPersistQueryTabs: (value) =>
+    set((state) => {
+      const settings: AppSettings = {
+        ...state.settings,
+        workspace: {
+          ...state.settings.workspace,
+          persistQueryTabs: value,
+        },
+      };
+      saveSettings(settings);
+      return { settings };
+    }),
+}));

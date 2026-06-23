@@ -31,7 +31,7 @@ export interface QueryResult {
 export interface QueryTab {
   id: string;
   kind?: "query" | "diagram";
-  connectionId: string;
+  connectionId: string | null;
   database: string;
   diagramViewId?: string;
   initialSql?: string;

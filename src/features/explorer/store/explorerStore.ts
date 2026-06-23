@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import type { ConnectionInfo } from "../../connection/types";
 import type { ExplorerNode } from "../types";
+import { useSettingsStore } from "../../settings";
 import {
   explorerDatabases,
   explorerTables,
@@ -23,6 +24,7 @@ interface ExplorerState {
   removeServerNode: (connectionId: string) => void;
   toggleExpand: (nodeId: string) => Promise<void>;
   refreshNode: (nodeId: string) => Promise<void>;
+  refreshLoadedTableFolders: () => Promise<void>;
   selectNode: (nodeId: string | null) => void;
   getVisibleNodes: () => { node: ExplorerNode; depth: number }[];
 }
@@ -167,12 +169,28 @@ export const useExplorerStore = create<ExplorerState>((set, get) => ({
         loaded: false,
         expanded: false,
         children: [],
+        tableCache: node.type === "schema" ? undefined : node.tableCache,
       };
       return { nodes: newNodes };
     });
 
     // Re-expand to trigger fetch
     await get().toggleExpand(nodeId);
+  },
+
+  refreshLoadedTableFolders: async () => {
+    const tableFolderIds = Object.values(get().nodes)
+      .filter(
+        (node) =>
+          node.type === "folder" &&
+          node.folderKind === "tables" &&
+          node.loaded
+      )
+      .map((node) => node.id);
+
+    for (const nodeId of tableFolderIds) {
+      await get().refreshNode(nodeId);
+    }
   },
 
   selectNode: (nodeId) => set({ selectedNodeId: nodeId }),
@@ -256,7 +274,8 @@ async function fetchChildren(node: ExplorerNode): Promise<ExplorerNode[]> {
       break;
     }
 
-    case "folder": {
+    case "folder":
+    case "schema": {
       if (!node.database) {
         console.error(`Expected database on node ${node.id} but it was undefined`);
         return children;
@@ -285,6 +304,34 @@ async function fetchChildren(node: ExplorerNode): Promise<ExplorerNode[]> {
         }
         case "tables": {
           const tables = await explorerTables(connectionId, db);
+          const groupTablesBySchema =
+            useSettingsStore.getState().settings.explorer.groupTablesBySchema;
+
+          if (groupTablesBySchema) {
+            const schemas = Array.from(new Set(tables.map((t) => t.schema))).sort(
+              (a, b) => a.localeCompare(b)
+            );
+            for (const schema of schemas) {
+              children.push({
+                id: makeNodeId(connectionId, "db", db, "schema", schema),
+                connectionId,
+                type: "schema",
+                name: schema,
+                schema,
+                database: db,
+                tableCache: tables,
+                expanded: false,
+                loading: false,
+                loaded: false,
+                children: [],
+                parentId: node.id,
+                hasChildren: true,
+                folderKind: "table-schema",
+              });
+            }
+            break;
+          }
+
           for (const t of tables) {
             children.push({
               id: makeNodeId(connectionId, "db", db, "table", t.schema, t.name),
@@ -292,6 +339,31 @@ async function fetchChildren(node: ExplorerNode): Promise<ExplorerNode[]> {
               type: "table",
               name: t.name,
               label: `${t.schema}.${t.name}`,
+              schema: t.schema,
+              database: db,
+              expanded: false,
+              loading: false,
+              loaded: false,
+              children: [],
+              parentId: node.id,
+              hasChildren: true,
+            });
+          }
+          break;
+        }
+        case "table-schema": {
+          if (!node.schema) {
+            console.error(`Expected schema on node ${node.id} but it was undefined`);
+            return children;
+          }
+
+          const tables = node.tableCache ?? (await explorerTables(connectionId, db));
+          for (const t of tables.filter((table) => table.schema === node.schema)) {
+            children.push({
+              id: makeNodeId(connectionId, "db", db, "table", t.schema, t.name),
+              connectionId,
+              type: "table",
+              name: t.name,
               schema: t.schema,
               database: db,
               expanded: false,

@@ -1,0 +1,15 @@
+/* SSMSX — Motion tokens
+   Motion is minimal and functional: short fades and color transitions on hover,
+   a chevron rotate on tree expand, and a spinner for async loads. No bounces,
+   no decorative looping animation in the product UI. */
+
+:root {
+  --duration-fast: 120ms;   /* @kind other */ /* hover / color transitions */
+  --duration-base: 160ms;   /* @kind other */ /* expand / collapse */
+  --ease-standard: ease;    /* @kind other */ /* the app uses default ease */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1); /* @kind other */
+}
+
+@keyframes ssmsx-spin {
+  to { transform: rotate(360deg); }
+}

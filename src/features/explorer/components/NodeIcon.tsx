@@ -98,6 +98,7 @@ export function NodeIcon({ type, folderKind }: NodeIconProps) {
         </svg>
       );
     case "folder":
+    case "schema":
       return (
         <svg className={className} viewBox="0 0 16 16" fill="currentColor" opacity="0.6">
           {folderKind === "programmability" ? (

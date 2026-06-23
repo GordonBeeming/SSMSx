@@ -6,11 +6,18 @@ import {
   connectionDelete,
   connectionTest,
   connectionConnect,
+  connectionCancelRequest,
   connectionDisconnect,
 } from "../api/connectionApi";
 import { useExplorerStore } from "../../explorer";
+import { CONNECTION_CANCELLED_MESSAGE } from "../utils/connectionResult";
 
 export type DialogTab = "properties" | "connectionString" | "custom";
+export type ConnectionOperation = "test" | "connect" | null;
+export type ConnectionOperationTarget = Pick<
+  ConnectionInfo,
+  "id" | "name" | "serverName" | "database" | "authType" | "username"
+>;
 
 interface ConnectionState {
   connections: ConnectionInfo[];
@@ -19,6 +26,9 @@ interface ConnectionState {
   dialogOpen: boolean;
   dialogTab: DialogTab;
   loading: boolean;
+  activeOperation: ConnectionOperation;
+  activeRequestId: string | null;
+  activeOperationTarget: ConnectionOperationTarget | null;
   testResult: ConnectionTestResult | null;
   error: string | null;
   searchFilter: string;
@@ -39,6 +49,7 @@ interface ConnectionState {
     password?: string
   ) => Promise<ConnectionTestResult>;
   connect: (id: string) => Promise<void>;
+  cancelConnectionAttempt: () => Promise<void>;
   disconnect: (id: string) => Promise<void>;
   isConnected: (id: string) => boolean;
 }
@@ -50,6 +61,9 @@ export const useConnectionStore = create<ConnectionState>((set, get) => ({
   dialogOpen: false,
   dialogTab: "properties",
   loading: false,
+  activeOperation: null,
+  activeRequestId: null,
+  activeOperationTarget: null,
   testResult: null,
   error: null,
   searchFilter: "",
@@ -76,22 +90,40 @@ export const useConnectionStore = create<ConnectionState>((set, get) => ({
     })),
 
   openDialog: () => {
-    set({
+    set((state) => ({
       dialogOpen: true,
       dialogTab: "properties",
+      loading: state.loading && !!state.activeRequestId,
       testResult: null,
       error: null,
-    });
+      activeOperation:
+        state.loading && state.activeRequestId ? state.activeOperation : null,
+      activeRequestId:
+        state.loading && state.activeRequestId ? state.activeRequestId : null,
+      activeOperationTarget:
+        state.loading && state.activeRequestId
+          ? state.activeOperationTarget
+          : null,
+    }));
     get().loadConnections();
   },
 
-  closeDialog: () =>
+  closeDialog: () => {
+    if (get().activeRequestId) {
+      void get().cancelConnectionAttempt();
+    }
+
     set({
       dialogOpen: false,
       selectedConnection: null,
       testResult: null,
       error: null,
-    }),
+      activeOperation: null,
+      activeRequestId: null,
+      activeOperationTarget: null,
+      loading: false,
+    });
+  },
 
   setDialogTab: (tab) => set({ dialogTab: tab }),
   setSearchFilter: (filter) => set({ searchFilter: filter }),
@@ -125,24 +157,56 @@ export const useConnectionStore = create<ConnectionState>((set, get) => ({
   },
 
   testConnection: async (info, password) => {
-    set({ loading: true, testResult: null, error: null });
+    const requestId = crypto.randomUUID();
+    set({
+      loading: true,
+      activeOperation: "test",
+      activeRequestId: requestId,
+      activeOperationTarget: toOperationTarget(info),
+      testResult: null,
+      error: null,
+    });
     try {
-      const result = await connectionTest(info, password);
+      const result = await connectionTest(info, password, requestId);
+      if (get().activeRequestId !== requestId) {
+        return { success: false, error: CONNECTION_CANCELLED_MESSAGE };
+      }
       set({ testResult: result });
       return result;
     } catch (e) {
       const result = { success: false, error: String(e) };
-      set({ testResult: result });
+      if (get().activeRequestId === requestId) {
+        set({ testResult: result });
+      }
       return result;
     } finally {
-      set({ loading: false });
+      if (get().activeRequestId === requestId) {
+        set({
+          loading: false,
+          activeOperation: null,
+          activeRequestId: null,
+          activeOperationTarget: null,
+        });
+      }
     }
   },
 
   connect: async (id) => {
-    set({ loading: true, error: null });
+    const requestId = crypto.randomUUID();
+    const target = get().connections.find((c) => c.id === id);
+    set({
+      loading: true,
+      activeOperation: "connect",
+      activeRequestId: requestId,
+      activeOperationTarget: target ? toOperationTarget(target) : null,
+      testResult: null,
+      error: null,
+    });
     try {
-      await connectionConnect(id);
+      await connectionConnect(id, requestId);
+      if (get().activeRequestId !== requestId) {
+        return;
+      }
       const connection = get().connections.find((c) => c.id === id);
       set((state) => ({
         activeConnectionIds: state.activeConnectionIds.includes(id)
@@ -154,9 +218,45 @@ export const useConnectionStore = create<ConnectionState>((set, get) => ({
         useExplorerStore.getState().addServerNode(id, connection);
       }
     } catch (e) {
-      set({ error: String(e) });
+      if (get().activeRequestId === requestId) {
+        set({ error: String(e) });
+      }
     } finally {
-      set({ loading: false });
+      if (get().activeRequestId === requestId) {
+        set({
+          loading: false,
+          activeOperation: null,
+          activeRequestId: null,
+          activeOperationTarget: null,
+        });
+      }
+    }
+  },
+
+  cancelConnectionAttempt: async () => {
+    const { activeOperationTarget, activeRequestId: requestId } = get();
+    if (!requestId) {
+      return;
+    }
+
+    set({
+      loading: false,
+      activeOperation: null,
+      activeRequestId: null,
+      activeOperationTarget: null,
+      testResult: { success: false, error: CONNECTION_CANCELLED_MESSAGE },
+    });
+
+    window.dispatchEvent(
+      new CustomEvent("connection:attempt-cancelled", {
+        detail: { connectionId: activeOperationTarget?.id ?? null },
+      })
+    );
+
+    try {
+      await connectionCancelRequest(requestId);
+    } catch (e) {
+      console.warn(`Failed to cancel connection request '${requestId}':`, e);
     }
   },
 
@@ -176,3 +276,16 @@ export const useConnectionStore = create<ConnectionState>((set, get) => ({
 
   isConnected: (id) => get().activeConnectionIds.includes(id),
 }));
+
+function toOperationTarget(
+  connection: ConnectionInfo
+): ConnectionOperationTarget {
+  return {
+    id: connection.id,
+    name: connection.name,
+    serverName: connection.serverName,
+    database: connection.database,
+    authType: connection.authType,
+    username: connection.username,
+  };
+}

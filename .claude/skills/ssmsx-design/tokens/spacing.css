@@ -1,0 +1,32 @@
+/* SSMSX — Spacing tokens
+   A tight 4px base grid. The app packs a lot of information density, so the
+   common values live at the small end (2–12px). */
+
+:root {
+  --space-0:  0;
+  --space-px: 1px;
+  --space-0_5: 2px;
+  --space-1:  4px;
+  --space-1_5: 6px;
+  --space-2:  8px;
+  --space-2_5: 10px;
+  --space-3:  12px;
+  --space-4:  16px;
+  --space-5:  20px;
+  --space-6:  24px;
+  --space-8:  32px;
+  --space-10: 40px;
+
+  /* ---- Component rhythm ---- */
+  --pad-row-y:    2px;   /* tree rows, grid cells */
+  --pad-toolbar:  8px;   /* toolbar vertical padding */
+  --pad-control-x: 12px; /* button / input horizontal padding */
+  --pad-control-y: 4px;  /* button / input vertical padding */
+  --pad-dialog:   16px;
+
+  /* ---- Fixed layout dimensions (workbench chrome) ---- */
+  --explorer-width: 260px; /* Object Explorer sidebar */
+  --tree-indent:    16px;  /* per-depth indent in the tree */
+  --row-height:     26px;  /* virtualized tree row height */
+  --tab-max-width:  200px; /* query tab max width */
+}

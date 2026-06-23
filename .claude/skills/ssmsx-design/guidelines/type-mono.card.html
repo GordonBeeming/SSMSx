@@ -1,0 +1,24 @@
+<!-- @dsCard group="Type" viewport="700x160" name="Monospace & eyebrows" subtitle="Code/SQL + result grids in mono; uppercase tracked section labels" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<link rel="stylesheet" href="../styles.css" />
+<style>
+  body { margin: 0; font-family: var(--font-ui); background: #fff; padding: 20px; color: var(--text-primary); }
+  .eyebrow { font-size: var(--text-2xs); font-weight: 600; letter-spacing: var(--tracking-wider); text-transform: uppercase; color: var(--text-secondary); }
+  .code { font-family: var(--font-mono); font-size: var(--text-xs); background: var(--surface-app); border: 1px solid var(--border-default); border-radius: var(--radius-sm); padding: 10px 12px; margin-top: 8px; white-space: pre; color: var(--text-primary); }
+  .kw { color: var(--accent); }
+  .err { color: var(--status-error); }
+  .grid { margin-top: 14px; font-family: var(--font-mono); font-size: var(--text-xs); color: var(--text-secondary); }
+</style>
+</head>
+<body>
+  <div class="eyebrow">Object Explorer</div>
+  <div class="code"><span class="kw">SELECT</span> TOP 100 CustomerId, Name, City
+<span class="kw">FROM</span>   dbo.Customer
+<span class="kw">WHERE</span>  IsActive = 1
+<span class="kw">ORDER BY</span> Name;</div>
+  <div class="grid">Msg 208, Level 16 — <span class="err">Invalid object name 'dbo.Custmer'.</span></div>
+</body>
+</html>

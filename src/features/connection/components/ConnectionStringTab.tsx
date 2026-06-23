@@ -1,6 +1,10 @@
 import { useState, useEffect } from "react";
 import type { ConnectionInfo, AuthType, EncryptMode } from "../types";
 import { useConnectionStore } from "../store/connectionStore";
+import {
+  CONNECTION_CANCELLED_MESSAGE,
+  isConnectionCancellation,
+} from "../utils/connectionResult";
 
 function parseConnectionString(cs: string): Partial<ConnectionInfo> {
   const parts: Record<string, string> = {};
@@ -52,6 +56,10 @@ export function ConnectionStringTab() {
 
   const [cs, setCs] = useState(selectedConnection?.connectionString || "");
   const [error, setError] = useState<string | null>(null);
+  const isCancelled =
+    !!testResult &&
+    !testResult.success &&
+    isConnectionCancellation(testResult.error);
 
   useEffect(() => {
     setCs(selectedConnection?.connectionString || "");
@@ -133,15 +141,21 @@ export function ConnectionStringTab() {
         {(error || testResult) && (
           <div
             className={`mb-3 rounded px-3 py-2 text-sm ${
-              error || !testResult?.success
+              error
                 ? "bg-error/10 text-error"
-                : "bg-success/10 text-success"
+                : testResult?.success
+                  ? "bg-success/10 text-success"
+                  : isCancelled
+                    ? "bg-warning/10 text-warning"
+                    : "bg-error/10 text-error"
             }`}
           >
             {error
               ? error
               : testResult?.success
                 ? "Connection successful!"
+                : isCancelled
+                  ? CONNECTION_CANCELLED_MESSAGE
                 : `Connection failed: ${testResult?.error}`}
           </div>
         )}
