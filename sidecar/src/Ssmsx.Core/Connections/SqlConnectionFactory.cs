@@ -1,5 +1,4 @@
 using Microsoft.Data.SqlClient;
-using Ssmsx.Core.Auth;
 using Ssmsx.Core.Credentials;
 using Ssmsx.Protocol.Models;
 
@@ -7,8 +6,6 @@ namespace Ssmsx.Core.Connections;
 
 public class SqlConnectionFactory
 {
-    private readonly Lazy<EntraMfaAuthenticator> _entraMfa = new(() => new EntraMfaAuthenticator());
-
     public async Task<SqlConnection> CreateAsync(
         ConnectionInfo info,
         ICredentialStore credentialStore,
@@ -37,21 +34,29 @@ public class SqlConnectionFactory
 
     private async Task<SqlConnection> CreateEntraMfaConnectionAsync(ConnectionInfo info, CancellationToken ct)
     {
-        var token = await _entraMfa.Value.AcquireTokenAsync(info.Username, ct);
+        var connection = new SqlConnection(BuildEntraMfaConnectionString(info));
+        await connection.OpenAsync(ct);
+        return connection;
+    }
+
+    internal static string BuildEntraMfaConnectionString(ConnectionInfo info)
+    {
         var builder = new SqlConnectionStringBuilder
         {
             DataSource = info.ServerName,
+            Authentication = SqlAuthenticationMethod.ActiveDirectoryInteractive,
             ConnectTimeout = 15,
             Encrypt = MapEncrypt(info.Encrypt),
             TrustServerCertificate = info.TrustServerCertificate
         };
+
+        if (!string.IsNullOrEmpty(info.Username))
+            builder.UserID = info.Username;
+
         if (!string.IsNullOrEmpty(info.Database))
             builder.InitialCatalog = info.Database;
 
-        var connection = new SqlConnection(builder.ConnectionString);
-        connection.AccessToken = token;
-        await connection.OpenAsync(ct);
-        return connection;
+        return builder.ConnectionString;
     }
 
     private static string BuildSqlAuthConnectionString(ConnectionInfo info, string password)
