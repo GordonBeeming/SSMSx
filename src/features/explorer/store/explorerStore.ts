@@ -169,6 +169,7 @@ export const useExplorerStore = create<ExplorerState>((set, get) => ({
         loaded: false,
         expanded: false,
         children: [],
+        tableCache: node.type === "schema" ? undefined : node.tableCache,
       };
       return { nodes: newNodes };
     });

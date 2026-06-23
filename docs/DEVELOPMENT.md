@@ -13,7 +13,7 @@ Tauri v2 shell
     Tailwind CSS v4 app styling
   C# .NET sidecar
     Microsoft.Data.SqlClient
-    MSAL / Entra auth support
+    SqlClient interactive Entra auth support
     Schema discovery and query execution
 ```
 

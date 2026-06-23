@@ -13,7 +13,7 @@ React (invoke) → Tauri Command (Rust) → stdio JSON → C# Sidecar → SQL Se
 ```
 
 - Tauri provides the native window and IPC layer (same architecture as GitButler)
-- C# sidecar uses Microsoft's own `Microsoft.Data.SqlClient` and `MSAL` — the most reliable way to handle SQL Server connectivity and Entra MFA auth
+- C# sidecar uses Microsoft's own `Microsoft.Data.SqlClient` for SQL Server connectivity and interactive Entra MFA auth
 - Communication is newline-delimited JSON over stdio with correlation IDs and batched streaming for large result sets
 - React frontend uses Monaco Editor, Zustand state, and TanStack virtualized tables
 
@@ -176,7 +176,7 @@ Each milestone has corresponding GitHub issues tracked under a matching GitHub m
 | 13 | Connection dialog UI — Connection String tab | ui |
 | 14 | Connection dialog UI — Custom Properties (name, color) | ui |
 | 15 | Recent connections list | ui |
-| 16 | Microsoft Entra MFA via MSAL | sidecar, auth |
+| 16 | Microsoft Entra MFA via SqlClient interactive auth | sidecar, auth |
 | 17 | OS Keychain credential storage | sidecar, security |
 
 **Verification**: Connect to a SQL Server with SQL auth and Microsoft Entra MFA. Connections saved to disk. Reconnect from recent connections list.
@@ -280,7 +280,7 @@ Each milestone follows this cycle:
 
 **Rust**: tauri 2.x, serde, serde_json, tokio
 
-**C# (NuGet)**: Microsoft.Data.SqlClient 6.x, Microsoft.Identity.Client (MSAL) 4.x, System.Text.Json
+**C# (NuGet)**: Microsoft.Data.SqlClient 6.x, System.Text.Json
 
 **Frontend (npm)**: react 19.x, vite 6.x, tailwindcss 4.x, @tauri-apps/api 2.x, @monaco-editor/react 4.x, @tanstack/react-table 8.x, @tanstack/react-virtual 3.x, zustand 5.x
 

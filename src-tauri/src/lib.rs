@@ -137,7 +137,7 @@ fn build_menu(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
                 .build(handle)?,
         )
         .item(
-            &MenuItemBuilder::with_id("execute-selection", "Execute Selection")
+            &MenuItemBuilder::with_id("execute-selection", "Execute Current Query")
                 .accelerator("CmdOrCtrl+Shift+E")
                 .build(handle)?,
         )

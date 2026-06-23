@@ -22,7 +22,8 @@ var queryCancellationManager = new QueryCancellationManager();
 var queryExecutor = new QueryExecutor(connectionManager, queryCancellationManager);
 var intelliSenseService = new IntelliSenseService(connectionManager);
 var requestCancellation = new ConcurrentDictionary<string, CancellationTokenSource>();
-var cancelledRequestIds = new ConcurrentDictionary<string, byte>();
+var cancelledRequestIds = new ConcurrentDictionary<string, DateTimeOffset>();
+var cancelledRequestIdTtl = TimeSpan.FromMinutes(5);
 
 await using var stdout = Console.OpenStandardOutput();
 using var writer = new StreamWriter(stdout) { AutoFlush = true };
@@ -48,6 +49,29 @@ void SendError(string requestId, string code, string message)
         Error = new JsonRpcError { Code = code, Message = message }
     };
     WriteResponse(JsonSerializer.Serialize(response, ProtocolJsonContext.Default.JsonRpcResponse));
+}
+
+void PruneExpiredCancelledRequestIds()
+{
+    var cutoff = DateTimeOffset.UtcNow - cancelledRequestIdTtl;
+    foreach (var entry in cancelledRequestIds)
+    {
+        if (entry.Value <= cutoff)
+        {
+            cancelledRequestIds.TryRemove(entry.Key, out _);
+        }
+    }
+}
+
+bool TryConsumeCancelledRequestId(string requestId)
+{
+    PruneExpiredCancelledRequestIds();
+    if (!cancelledRequestIds.TryRemove(requestId, out var cancelledAt))
+    {
+        return false;
+    }
+
+    return DateTimeOffset.UtcNow - cancelledAt <= cancelledRequestIdTtl;
 }
 
 var handlers = new Dictionary<string, Func<JsonElement?, Task<JsonElement>>>
@@ -295,7 +319,8 @@ var stdinReader = new Thread(() =>
                     }
                     else
                     {
-                        cancelledRequestIds[cancelArgs.RequestId] = 0;
+                        PruneExpiredCancelledRequestIds();
+                        cancelledRequestIds[cancelArgs.RequestId] = DateTimeOffset.UtcNow;
                         cancelled = true;
                     }
                     SendResult(peek.Id, JsonSerializer.SerializeToElement(cancelled, ProtocolJsonContext.Default.Boolean));
@@ -366,7 +391,7 @@ foreach (var requestLine in requestQueue.GetConsumingEnumerable())
         {
             var cts = new CancellationTokenSource();
             requestCancellation[request.Id] = cts;
-            if (cancelledRequestIds.TryRemove(request.Id, out _))
+            if (TryConsumeCancelledRequestId(request.Id))
             {
                 cts.Cancel();
             }

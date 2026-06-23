@@ -10,7 +10,7 @@ SSMS is Windows-only. Azure Data Studio is nearing end-of-life. Neither feels fa
 
 - **Cross-platform by design:** macOS, Windows, and Linux through Tauri.
 - **Fast startup and low overhead:** native shell, React UI, and a focused C# sidecar instead of a heavyweight IDE runtime.
-- **Real SQL Server connectivity:** `Microsoft.Data.SqlClient` and MSAL/Entra support where it belongs.
+- **Real SQL Server connectivity:** `Microsoft.Data.SqlClient` with SQL Server auth and SqlClient interactive Entra auth.
 - **Developer-first query workflow:** Monaco editor, tabs, IntelliSense, execution shortcuts, result-set tabs, messages, and clipboard-friendly grids.
 - **Useful database navigation:** lazy Object Explorer for databases, tables, views, procedures, functions, columns, keys, indexes, users, and diagrams.
 - **Quiet, dense UI:** light theme, cool grays, one blue accent, 1px borders, and no decorative chrome fighting the data.
@@ -33,7 +33,7 @@ SSMSx already has the core workbench in place:
 Tauri v2 shell
 React 19 + TypeScript frontend
 C# .NET sidecar for SQL Server operations
-Microsoft.Data.SqlClient + MSAL
+Microsoft.Data.SqlClient
 Monaco Editor
 Zustand
 Tailwind CSS v4

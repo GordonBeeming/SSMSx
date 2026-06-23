@@ -2,7 +2,7 @@
 
 A design system for **SSMSx** — *"a fast, cross-platform SQL Server Management Studio built for developers who are tired of waiting."*
 
-SSMSx is a desktop SQL Server client and a modern alternative to SSMS (Windows-only) and Azure Data Studio (nearing end-of-life). It's built as a **Tauri v2 (Rust) shell + React 19 / TypeScript frontend + C# Native AOT sidecar**, talking to SQL Server via `Microsoft.Data.SqlClient` with MSAL/Entra auth. The UI is deliberately compact, light-themed, keyboard-driven and information-dense — it has to feel instant.
+SSMSx is a desktop SQL Server client and a modern alternative to SSMS (Windows-only) and Azure Data Studio (nearing end-of-life). It's built as a **Tauri v2 (Rust) shell + React 19 / TypeScript frontend + C# Native AOT sidecar**, talking to SQL Server via `Microsoft.Data.SqlClient` with SQL Server auth and SqlClient interactive Entra auth. The UI is deliberately compact, light-themed, keyboard-driven and information-dense — it has to feel instant.
 
 This project distills SSMSx's real, shipping look-and-feel into reusable tokens, components, foundation cards and a full workbench UI kit, so new screens, marketing pages, docs and decks all look like SSMSx.
 
