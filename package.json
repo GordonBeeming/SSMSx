@@ -35,5 +35,8 @@
     "@vitejs/plugin-react": "^4",
     "typescript": "^5.7",
     "vite": "^6"
+  },
+  "overrides": {
+    "dompurify": "3.4.11"
   }
 }

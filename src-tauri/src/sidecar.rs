@@ -11,11 +11,16 @@ use tokio::sync::{mpsc, oneshot, Mutex};
 /// Kept at 30s to accommodate slow initial connections while still failing fast for hangs.
 const REQUEST_TIMEOUT_SECS: u64 = 30;
 
+type RequestSender = oneshot::Sender<Result<Value, String>>;
+type StreamSender = mpsc::UnboundedSender<Result<Value, String>>;
+type PendingRequests = Arc<Mutex<HashMap<String, RequestSender>>>;
+type PendingStreams = Arc<Mutex<HashMap<String, StreamSender>>>;
+
 #[derive(Clone)]
 pub struct SidecarManager {
     child: Arc<Mutex<Option<CommandChild>>>,
-    pending: Arc<Mutex<HashMap<String, oneshot::Sender<Result<Value, String>>>>>,
-    pending_stream: Arc<Mutex<HashMap<String, mpsc::UnboundedSender<Result<Value, String>>>>>,
+    pending: PendingRequests,
+    pending_stream: PendingStreams,
     running: Arc<AtomicBool>,
 }
 

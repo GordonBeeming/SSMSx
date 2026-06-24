@@ -44,7 +44,10 @@ pub async fn query_execute(
 
                     // Inject requestId into the payload so frontend can correlate
                     let mut payload = value.as_object().cloned().unwrap_or_default();
-                    payload.insert("requestId".to_string(), serde_json::Value::String(rid.clone()));
+                    payload.insert(
+                        "requestId".to_string(),
+                        serde_json::Value::String(rid.clone()),
+                    );
                     let payload = serde_json::Value::Object(payload);
 
                     if has_error {
@@ -110,9 +113,11 @@ pub async fn query_cancel(
 ) -> Result<String, String> {
     log::debug!("Cancelling query: query_id='{}'", query_id);
     let params = serde_json::json!({ "queryId": query_id });
-    let result = sidecar
-        .send_request("query.cancel", Some(params))
-        .await?;
-    serde_json::to_string(&result)
-        .map_err(|e| format!("Failed to serialize cancel response for query '{}': {}", query_id, e))
+    let result = sidecar.send_request("query.cancel", Some(params)).await?;
+    serde_json::to_string(&result).map_err(|e| {
+        format!(
+            "Failed to serialize cancel response for query '{}': {}",
+            query_id, e
+        )
+    })
 }

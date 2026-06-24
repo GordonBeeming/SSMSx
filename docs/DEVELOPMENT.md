@@ -91,13 +91,15 @@ npm run tauri icon .agents/skills/ssmsx-design/assets/icon-1024.png
 
 ## CI
 
-The GitHub workflow builds the frontend, .NET sidecar, and Tauri bundle across Linux, macOS, and Windows. Release events also run the macOS signing and notarization job.
+The GitHub workflow builds the frontend, .NET sidecar, and Tauri bundle across Linux, macOS, and Windows. It also runs npm audit, Rust formatting, clippy, tests, build checks, and Rust advisory audit. Release events run the macOS signing, notarization, DMG upload, and Homebrew cask update job.
 
 ## Release Versioning
 
-- Release tag: `v{major}.{minor}`.
-- CI app version: `{major}.{minor}.{github_run_number}`.
-- DMG asset: `ssmsx-{major}.{minor}-aarch64.dmg`.
+- Stable release tag: `v{major}.{minor}`.
+- Beta release tag: `v{major}.{minor}-beta.{n}`.
+- Stable CI app version: `{major}.{minor}.{github_run_number}`.
+- Beta CI app version: `{major}.{minor}.{github_run_number}-beta.{n}`.
+- DMG asset: `ssmsx-{tag without v}-aarch64.dmg`.
 - Homebrew cask: `gordonbeeming/tap/ssmsx`.
 
 Use `.agents/skills/create-release` when cutting a release.
