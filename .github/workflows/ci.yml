@@ -162,7 +162,21 @@ jobs:
 
       # ── Tauri CLI ──────────────────────────────────────────────
       - name: Install Tauri CLI
-        run: cargo install tauri-cli --version "^2"
+        shell: bash
+        env:
+          CARGO_HTTP_MULTIPLEXING: "false"
+        run: |
+          for attempt in 1 2 3; do
+            if cargo install tauri-cli --version "^2"; then
+              exit 0
+            fi
+
+            if [ "$attempt" = 3 ]; then
+              exit 1
+            fi
+
+            sleep "$((attempt * 10))"
+          done
 
       # ── Tauri / Rust ─────────────────────────────────────────
       - name: Build Tauri app
