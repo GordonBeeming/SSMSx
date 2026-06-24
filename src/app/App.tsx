@@ -82,6 +82,7 @@ function App() {
 
     const initialize = async () => {
       const queryStore = useQueryStore.getState();
+      const connectionStore = useConnectionStore.getState();
       const persistTabs =
         useSettingsStore.getState().settings.workspace.persistQueryTabs;
       if (!persistTabs) {
@@ -92,11 +93,13 @@ function App() {
       tabCounter = Math.max(tabCounter, getHighestQueryNumber(queryStore.tabs));
 
       if (!restored) {
-        useConnectionStore.getState().openDialog();
+        await connectionStore.loadConnections();
+        window.requestAnimationFrame(() => {
+          useConnectionStore.getState().openDialog();
+        });
         return;
       }
 
-      const connectionStore = useConnectionStore.getState();
       await connectionStore.loadConnections();
 
       const restoredConnectionIds = Array.from(
@@ -136,6 +139,15 @@ function App() {
             }
           }
         }
+      }
+
+      if (
+        useQueryStore.getState().tabs.length === 0 &&
+        useConnectionStore.getState().activeConnectionIds.length === 0
+      ) {
+        window.requestAnimationFrame(() => {
+          useConnectionStore.getState().openDialog();
+        });
       }
     };
 
@@ -410,17 +422,7 @@ function App() {
           ) : (
             <div className="flex flex-1 items-center justify-center overflow-auto">
               {!hasConnections ? (
-                <div className="text-center">
-                  <p className="text-lg text-text-secondary">
-                    Connect to a SQL Server to get started
-                  </p>
-                  <button
-                    onClick={openDialog}
-                    className="mt-4 rounded bg-accent px-6 py-2 text-accent-text hover:bg-accent-hover"
-                  >
-                    New Connection
-                  </button>
-                </div>
+                <div className="h-full w-full" />
               ) : (
                 <p className="text-sm text-text-secondary">
                   Browse objects in the explorer, or press {shortcutKey}+N for a

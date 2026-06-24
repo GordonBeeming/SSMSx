@@ -27,11 +27,12 @@ pub fn run() {
             // Build application menu
             build_menu(app)?;
 
-            // Auto-open devtools in debug builds
             #[cfg(debug_assertions)]
             {
-                if let Some(window) = app.get_webview_window("main") {
-                    window.open_devtools();
+                if std::env::var("SSMSX_OPEN_DEVTOOLS").as_deref() == Ok("1") {
+                    if let Some(window) = app.get_webview_window("main") {
+                        window.open_devtools();
+                    }
                 }
             }
 
