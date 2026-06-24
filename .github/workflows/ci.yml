@@ -42,7 +42,7 @@ jobs:
     steps:
       # ── Checkout ──────────────────────────────────────────────
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       # ── Toolchains ───────────────────────────────────────────
       - name: Install Rust (stable)
@@ -56,7 +56,7 @@ jobs:
           dotnet-version: 10.0.x
 
       - name: Install Node.js 24
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: 24
           cache: npm
@@ -70,7 +70,7 @@ jobs:
 
       # ── Caching ──────────────────────────────────────────────
       - name: Cache Cargo registry and target
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             ~/.cargo/bin/cargo-audit
@@ -84,7 +84,7 @@ jobs:
             cargo-${{ runner.os }}-
 
       - name: Cache NuGet packages
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.nuget/packages
           key: nuget-${{ runner.os }}-${{ hashFiles('**/Directory.Packages.props') }}
@@ -194,7 +194,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Install Rust (stable)
         uses: dtolnay/rust-toolchain@stable
@@ -205,13 +205,13 @@ jobs:
           dotnet-version: 10.0.x
 
       - name: Install Node.js 24
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: 24
           cache: npm
 
       - name: Cache Rust build output
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             ~/.cargo/registry
@@ -222,7 +222,7 @@ jobs:
             ${{ runner.os }}-release-cargo-
 
       - name: Cache NuGet packages
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.nuget/packages
           key: release-nuget-${{ runner.os }}-${{ hashFiles('**/Directory.Packages.props') }}
@@ -234,12 +234,13 @@ jobs:
 
       - name: Set release version
         run: |
-          if [[ ! "${GITHUB_REF_NAME}" =~ ^v([0-9]+)\.([0-9]+)(-beta\.[0-9]+)?$ ]]; then
+          if [[ "${GITHUB_REF_NAME}" =~ ^v([0-9]+)\.([0-9]+)(-beta\.[0-9]+)?$ ]]; then
+            export VERSION="${GITHUB_REF_NAME#v}"
+            export APP_VERSION="${BASH_REMATCH[1]}.${BASH_REMATCH[2]}.${GITHUB_RUN_NUMBER}${BASH_REMATCH[3]}"
+          else
             echo "Release tag must be stable v{major}.{minor} or beta v{major}.{minor}-beta.{n}, like v0.1 or v0.1-beta.1; got ${GITHUB_REF_NAME}" >&2
             exit 1
           fi
-          export VERSION="${GITHUB_REF_NAME#v}"
-          export APP_VERSION="${BASH_REMATCH[1]}.${BASH_REMATCH[2]}.${GITHUB_RUN_NUMBER}${BASH_REMATCH[3]}"
 
           node --input-type=module <<'NODE'
           import fs from "node:fs";
