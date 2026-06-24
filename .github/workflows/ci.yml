@@ -316,6 +316,7 @@ jobs:
           APP_BUNDLE="src-tauri/target/release/bundle/macos/SSMSx.app"
           INFO_PLIST="${APP_BUNDLE}/Contents/Info.plist"
           test -d "${APP_BUNDLE}" || { echo "Release app bundle was not created at ${APP_BUNDLE}." >&2; exit 1; }
+          test -f "${INFO_PLIST}" || { echo "Release app metadata was not created at ${INFO_PLIST}." >&2; exit 1; }
 
           BUNDLE_VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "${INFO_PLIST}")"
           if [ "${BUNDLE_VERSION}" != "${APP_VERSION}" ]; then

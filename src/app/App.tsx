@@ -94,7 +94,7 @@ function App() {
 
       if (!restored) {
         await connectionStore.loadConnections();
-        connectionStore.openDialog();
+        connectionStore.openDialog({ refreshConnections: false });
         return;
       }
 
@@ -143,7 +143,7 @@ function App() {
         useQueryStore.getState().tabs.length === 0 &&
         useConnectionStore.getState().activeConnectionIds.length === 0
       ) {
-        useConnectionStore.getState().openDialog();
+        useConnectionStore.getState().openDialog({ refreshConnections: false });
       }
     };
 
@@ -384,7 +384,7 @@ function App() {
         </button>
 
         <button
-          onClick={openDialog}
+          onClick={() => openDialog()}
           className="rounded bg-accent px-3 py-1 text-sm text-accent-text hover:bg-accent-hover"
         >
           {hasConnections ? "Add Connection" : "Connect"}
