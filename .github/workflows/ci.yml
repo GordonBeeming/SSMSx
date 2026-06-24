@@ -74,6 +74,8 @@ jobs:
         with:
           path: |
             ~/.cargo/bin/cargo-audit
+            ~/.cargo/bin/cargo-audit.exe
+            ~/.cargo/advisory-db
             ~/.cargo/registry
             ~/.cargo/git
             src-tauri/target
@@ -138,10 +140,25 @@ jobs:
             cargo install cargo-audit --locked
           fi
 
+      - name: Fetch Rust advisory database
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          db="$HOME/.cargo/advisory-db"
+          auth="$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 | tr -d '\n')"
+          if [ -d "$db/.git" ]; then
+            git -C "$db" -c "http.https://github.com/.extraheader=AUTHORIZATION: basic $auth" pull --ff-only
+          else
+            rm -rf "$db"
+            git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic $auth" clone --depth=1 https://github.com/RustSec/advisory-db.git "$db"
+          fi
+
       - name: Run Rust advisory audit
+        shell: bash
         run: |
           cd src-tauri
-          cargo audit
+          cargo audit --db "$HOME/.cargo/advisory-db" --no-fetch
 
       # ── Tauri CLI ──────────────────────────────────────────────
       - name: Install Tauri CLI
