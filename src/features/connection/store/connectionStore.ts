@@ -38,7 +38,7 @@ interface ConnectionState {
   loadConnections: () => Promise<void>;
   setFormDirty: (dirty: boolean) => void;
   selectConnection: (c: ConnectionInfo | null) => void;
-  openDialog: () => void;
+  openDialog: (options?: { refreshConnections?: boolean }) => void;
   closeDialog: () => void;
   setDialogTab: (tab: DialogTab) => void;
   setSearchFilter: (filter: string) => void;
@@ -89,7 +89,7 @@ export const useConnectionStore = create<ConnectionState>((set, get) => ({
       formDirty: false,
     })),
 
-  openDialog: () => {
+  openDialog: (options) => {
     set((state) => ({
       dialogOpen: true,
       dialogTab: "properties",
@@ -105,7 +105,9 @@ export const useConnectionStore = create<ConnectionState>((set, get) => ({
           ? state.activeOperationTarget
           : null,
     }));
-    get().loadConnections();
+    if (options?.refreshConnections !== false) {
+      get().loadConnections();
+    }
   },
 
   closeDialog: () => {
