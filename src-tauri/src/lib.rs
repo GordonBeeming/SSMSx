@@ -29,7 +29,7 @@ pub fn run() {
 
             #[cfg(debug_assertions)]
             {
-                if std::env::var("SSMSX_OPEN_DEVTOOLS").as_deref() == Ok("1") {
+                if std::env::var("SSMSX_OPEN_DEVTOOLS").ok().as_deref() == Some("1") {
                     if let Some(window) = app.get_webview_window("main") {
                         window.open_devtools();
                     }

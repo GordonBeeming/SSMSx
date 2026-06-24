@@ -94,9 +94,7 @@ function App() {
 
       if (!restored) {
         await connectionStore.loadConnections();
-        window.requestAnimationFrame(() => {
-          useConnectionStore.getState().openDialog();
-        });
+        connectionStore.openDialog();
         return;
       }
 
@@ -145,9 +143,7 @@ function App() {
         useQueryStore.getState().tabs.length === 0 &&
         useConnectionStore.getState().activeConnectionIds.length === 0
       ) {
-        window.requestAnimationFrame(() => {
-          useConnectionStore.getState().openDialog();
-        });
+        useConnectionStore.getState().openDialog();
       }
     };
 
