@@ -17,5 +17,5 @@
     "noFallthroughCasesInSwitch": true,
     "noUncheckedSideEffectImports": true
   },
-  "include": ["src/app", "src/features", "src/shared", "src/main.tsx", "src/vite-env.d.ts"]
+  "include": ["src/app", "src/features", "src/shared", "src/main.tsx", "src/monaco-setup.ts", "src/vite-env.d.ts"]
 }

@@ -7,10 +7,12 @@ import { loader } from "@monaco-editor/react";
 // which blocks the CDN fetch and leaves the editor stuck on "Loading...".
 // Only the base editor worker is needed — we use Monaco for SQL editing with a
 // custom completion provider, not the JSON/TS/CSS language services.
-self.MonacoEnvironment = {
-  getWorker() {
-    return new editorWorker();
-  },
+//
+// monaco-editor declares MonacoEnvironment as an ambient global binding (not a
+// property of Window), so assign it directly rather than via `self` — Monaco
+// reads getWorker from it to locate its web worker.
+MonacoEnvironment = {
+  getWorker: (_workerId: string, _label: string) => new editorWorker(),
 };
 
 loader.config({ monaco });
