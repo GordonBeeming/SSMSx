@@ -1,5 +1,6 @@
 import React, { useEffect } from "react";
 import ReactDOM from "react-dom/client";
+import "./monaco-setup";
 import App from "./app/App";
 import { ErrorBoundary } from "./shared/components/ErrorBoundary";
 import { initQueryEventListeners } from "./features/query";
