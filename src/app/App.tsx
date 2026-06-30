@@ -1,4 +1,4 @@
-import { useEffect, useCallback, useRef, useState } from "react";
+import { useEffect, useCallback, useMemo, useRef, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { Info } from "lucide-react";
 import {
@@ -40,8 +40,11 @@ function App() {
     disconnect,
   } = useConnectionStore();
 
-  const activeConnections = connections.filter((c) =>
-    activeConnectionIds.includes(c.id)
+  // Memoized so the array identity is stable across renders — an unstable identity
+  // here cascades into createNewTab/useEffect deps and churns dependent effects.
+  const activeConnections = useMemo(
+    () => connections.filter((c) => activeConnectionIds.includes(c.id)),
+    [connections, activeConnectionIds]
   );
   const hasConnections = activeConnections.length > 0;
 
@@ -52,20 +55,40 @@ function App() {
   const startupInitializedRef = useRef(false);
 
   const createNewTab = useCallback(() => {
-    // Use the first active connection as default
-    const defaultConn = activeConnections[0];
-    if (!defaultConn) return;
+    const activeTab = tabs.find((t) => t.id === activeTabId);
+    // Prefer the connection of the tab the user is on; fall back to the first
+    // active connection so a new query opens against something sensible.
+    const sourceConn =
+      connections.find((c) => c.id === activeTab?.connectionId) ?? activeConnections[0];
+    if (!sourceConn) return;
+
+    // Inherit the active tab's database only when it belongs to the same
+    // connection; otherwise use the connection's default so the user doesn't
+    // have to re-pick the database for every new query.
+    const database =
+      activeTab && activeTab.connectionId === sourceConn.id
+        ? activeTab.database
+        : (sourceConn.database ?? "master");
 
     tabCounter++;
     addTab({
       id: crypto.randomUUID(),
       kind: "query",
-      connectionId: defaultConn.id,
-      database: defaultConn.database ?? "master",
+      connectionId: sourceConn.id,
+      database,
       title: `Query ${tabCounter}`,
-      connectionColor: defaultConn.color,
+      connectionColor: sourceConn.color,
     });
-  }, [activeConnections, addTab]);
+  }, [tabs, activeTabId, connections, activeConnections, addTab]);
+
+  // Hold the latest callbacks so the native-menu listeners (registered once on
+  // mount) always invoke the current implementation without re-registering.
+  const createNewTabRef = useRef(createNewTab);
+  const openDialogRef = useRef(openDialog);
+  useEffect(() => {
+    createNewTabRef.current = createNewTab;
+    openDialogRef.current = openDialog;
+  });
 
   const persistQuerySession = useCallback(() => {
     const queryStore = useQueryStore.getState();
@@ -207,10 +230,10 @@ function App() {
 
   // Listen for new tab events from the tab bar's "+" button
   useEffect(() => {
-    const handler = () => createNewTab();
+    const handler = () => createNewTabRef.current();
     window.addEventListener("query:new-tab", handler);
     return () => window.removeEventListener("query:new-tab", handler);
-  }, [createNewTab]);
+  }, []);
 
   useEffect(() => {
     const handler = (event: Event) => {
@@ -236,29 +259,42 @@ function App() {
     return () => window.removeEventListener("diagram:open", handler);
   }, [addTab, connections]);
 
-  // Listen for native menu events from Tauri
+  // Listen for native menu events from Tauri.
+  // Registered ONCE on mount (empty deps); handlers call through refs so they
+  // always run the latest implementation without re-registering. `track` guards
+  // the async listen() race: a listener that resolves after cleanup is removed
+  // immediately instead of leaking — leaked menu:new-query listeners were why
+  // Cmd+N opened several tabs at once.
   useEffect(() => {
     if (!isTauriRuntime()) return;
 
+    let disposed = false;
     const unlisteners: Array<() => void> = [];
+    const track = (unlisten: () => void) => {
+      if (disposed) {
+        unlisten();
+      } else {
+        unlisteners.push(unlisten);
+      }
+    };
 
     const setup = async () => {
       // File > New Query
-      unlisteners.push(
+      track(
         await listen("menu:new-query", () => {
-          createNewTab();
+          createNewTabRef.current();
         })
       );
 
       // File > New Connection
-      unlisteners.push(
+      track(
         await listen("menu:new-connection", () => {
-          openDialog();
+          openDialogRef.current();
         })
       );
 
       // File > Close Tab
-      unlisteners.push(
+      track(
         await listen("menu:close-tab", () => {
           const store = useQueryStore.getState();
           if (store.activeTabId) {
@@ -268,21 +304,21 @@ function App() {
       );
 
       // Query > Execute
-      unlisteners.push(
+      track(
         await listen("menu:execute-query", () => {
           window.dispatchEvent(new CustomEvent("query:execute"));
         })
       );
 
       // Query > Execute Selection
-      unlisteners.push(
+      track(
         await listen("menu:execute-selection", () => {
           window.dispatchEvent(new CustomEvent("query:execute"));
         })
       );
 
       // Query > Cancel
-      unlisteners.push(
+      track(
         await listen("menu:cancel-query", () => {
           const store = useQueryStore.getState();
           if (store.activeTabId) {
@@ -292,14 +328,14 @@ function App() {
       );
 
       // SSMSx > Settings
-      unlisteners.push(
+      track(
         await listen("menu:show-settings", () => {
           setSettingsOpen(true);
         })
       );
 
       // SSMSx > About SSMSx
-      unlisteners.push(
+      track(
         await listen("menu:show-about", () => {
           setAboutOpen(true);
         })
@@ -311,11 +347,12 @@ function App() {
     );
 
     return () => {
+      disposed = true;
       for (const unlisten of unlisteners) {
         unlisten();
       }
     };
-  }, [createNewTab, openDialog]);
+  }, []);
 
   // Global keyboard shortcuts (F5 for execute when editor is not focused)
   useEffect(() => {
