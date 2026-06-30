@@ -21,9 +21,41 @@ const MAX_DISPLAY_ROWS = 1000;
 
 type ActiveTab = "results" | "messages";
 
-interface SelectedCell {
+interface CellRef {
   rowIndex: number;
   colIndex: number;
+}
+
+/**
+ * A rectangular selection defined by two corners. `anchor` is where the
+ * selection started (fixed while extending); `focus` is the moving/active
+ * corner. A single-cell selection is just `anchor === focus`.
+ */
+interface CellRange {
+  anchor: CellRef;
+  focus: CellRef;
+}
+
+interface RangeBounds {
+  minRow: number;
+  maxRow: number;
+  minCol: number;
+  maxCol: number;
+}
+
+function rangeBounds(range: CellRange): RangeBounds {
+  return {
+    minRow: Math.min(range.anchor.rowIndex, range.focus.rowIndex),
+    maxRow: Math.max(range.anchor.rowIndex, range.focus.rowIndex),
+    minCol: Math.min(range.anchor.colIndex, range.focus.colIndex),
+    maxCol: Math.max(range.anchor.colIndex, range.focus.colIndex),
+  };
+}
+
+function isInRange(range: CellRange | null, rowIndex: number, colIndex: number): boolean {
+  if (!range) return false;
+  const { minRow, maxRow, minCol, maxCol } = rangeBounds(range);
+  return rowIndex >= minRow && rowIndex <= maxRow && colIndex >= minCol && colIndex <= maxCol;
 }
 
 interface GridContextMenu {
@@ -58,11 +90,18 @@ export function QueryResultsTable({ result }: QueryResultsTableProps) {
   const [activeTab, setActiveTab] = useState<ActiveTab>(
     hasData ? "results" : "messages"
   );
-  const [selectedCell, setSelectedCell] = useState<SelectedCell | null>(null);
+  const [selection, setSelection] = useState<CellRange | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
   const [allRowsSelected, setAllRowsSelected] = useState(false);
   const [contextMenu, setContextMenu] = useState<GridContextMenu | null>(null);
   const [copyStatus, setCopyStatus] = useState<string | null>(null);
   const gridRef = useRef<HTMLDivElement>(null);
+  // Read inside the per-cell onMouseEnter handler; a ref avoids re-subscribing
+  // every cell on each drag-state change.
+  const isDraggingRef = useRef(false);
+
+  // The active/focus cell drives keyboard navigation and single-target copies.
+  const focusCell = selection?.focus ?? null;
 
   // If the situation changes (e.g. a new execution that only produced messages),
   // snap the active tab back to whichever has content.
@@ -91,10 +130,20 @@ export function QueryResultsTable({ result }: QueryResultsTableProps) {
   );
 
   useEffect(() => {
-    setSelectedCell(null);
+    setSelection(null);
     setAllRowsSelected(false);
     setContextMenu(null);
   }, [activeResultSetIndex, activeTab]);
+
+  // End a drag even if the pointer is released outside the grid.
+  useEffect(() => {
+    const stop = () => {
+      isDraggingRef.current = false;
+      setIsDragging(false);
+    };
+    window.addEventListener("mouseup", stop);
+    return () => window.removeEventListener("mouseup", stop);
+  }, []);
 
   useEffect(() => {
     if (!copyStatus) return;
@@ -130,29 +179,66 @@ export function QueryResultsTable({ result }: QueryResultsTableProps) {
   );
 
   const copySelectedCell = useCallback(() => {
-    if (!activeResultSet || !selectedCell) return;
-    const value = activeResultSet.rows[selectedCell.rowIndex]?.[selectedCell.colIndex];
+    if (!activeResultSet || !focusCell) return;
+    const value = activeResultSet.rows[focusCell.rowIndex]?.[focusCell.colIndex];
     void copyText(formatCell(value), "Copied cell");
-  }, [activeResultSet, copyText, selectedCell]);
+  }, [activeResultSet, copyText, focusCell]);
 
   const copySelectedRow = useCallback(
     (includeHeaders: boolean) => {
-      if (!activeResultSet || !selectedCell) return;
-      const row = activeResultSet.rows[selectedCell.rowIndex];
+      if (!activeResultSet || !focusCell) return;
+      const row = activeResultSet.rows[focusCell.rowIndex];
       if (!row) return;
       const rows = includeHeaders
         ? [activeResultSet.columns.map((column) => column.name), row]
         : [row];
       void copyText(rowsToTsv(rows), includeHeaders ? "Copied row with headers" : "Copied row");
     },
-    [activeResultSet, copyText, selectedCell]
+    [activeResultSet, copyText, focusCell]
   );
 
-  const selectCell = useCallback((rowIndex: number, colIndex: number) => {
-    setSelectedCell({ rowIndex, colIndex });
-    setAllRowsSelected(false);
-    gridRef.current?.focus();
-  }, []);
+  // Copy the rectangular selection as TSV (the Excel/SSMS-friendly format).
+  // A single-cell selection copies just that cell; multi-cell copies the block.
+  const copySelectionRange = useCallback(
+    (includeHeaders: boolean) => {
+      if (!activeResultSet || !selection) return;
+      const { minRow, maxRow, minCol, maxCol } = rangeBounds(selection);
+      const body: unknown[][] = [];
+      for (let r = minRow; r <= maxRow; r++) {
+        const row = activeResultSet.rows[r];
+        if (!row) continue;
+        body.push(row.slice(minCol, maxCol + 1));
+      }
+      const rows = includeHeaders
+        ? [
+            activeResultSet.columns.slice(minCol, maxCol + 1).map((column) => column.name),
+            ...body,
+          ]
+        : body;
+      const single = minRow === maxRow && minCol === maxCol;
+      const status = single
+        ? "Copied cell"
+        : includeHeaders
+          ? "Copied selection with headers"
+          : "Copied selection";
+      void copyText(rowsToTsv(rows), status);
+    },
+    [activeResultSet, copyText, selection]
+  );
+
+  // Begin a selection (or extend it when shift is held).
+  const startSelection = useCallback(
+    (rowIndex: number, colIndex: number, extend: boolean) => {
+      setAllRowsSelected(false);
+      setSelection((prev) =>
+        extend && prev
+          ? { anchor: prev.anchor, focus: { rowIndex, colIndex } }
+          : { anchor: { rowIndex, colIndex }, focus: { rowIndex, colIndex } }
+      );
+      gridRef.current?.focus();
+    },
+    []
+  );
 
   const handleGridKeyDown = useCallback(
     (event: ReactKeyboardEvent<HTMLDivElement>) => {
@@ -162,16 +248,22 @@ export function QueryResultsTable({ result }: QueryResultsTableProps) {
       const colCount = activeResultSet.columns.length;
       if (rowCount === 0 || colCount === 0) return;
 
-      const currentCell = selectedCell ?? { rowIndex: 0, colIndex: 0 };
-      const moveSelection = (rowDelta: number, colDelta: number) => {
+      const current = focusCell ?? { rowIndex: 0, colIndex: 0 };
+      // Move the focus corner. With shift, keep the anchor (grows the block);
+      // without shift, collapse to a single cell at the new focus.
+      const moveSelection = (rowDelta: number, colDelta: number, toCol?: number) => {
         event.preventDefault();
-        setSelectedCell(
-          selectedCell
-            ? {
-                rowIndex: clampIndex(currentCell.rowIndex + rowDelta, rowCount),
-                colIndex: clampIndex(currentCell.colIndex + colDelta, colCount),
-              }
-            : { rowIndex: 0, colIndex: 0 }
+        const nextFocus: CellRef = {
+          rowIndex: clampIndex(current.rowIndex + rowDelta, rowCount),
+          colIndex:
+            toCol !== undefined
+              ? clampIndex(toCol, colCount)
+              : clampIndex(current.colIndex + colDelta, colCount),
+        };
+        setSelection((prev) =>
+          event.shiftKey && prev
+            ? { anchor: prev.anchor, focus: nextFocus }
+            : { anchor: nextFocus, focus: nextFocus }
         );
         setAllRowsSelected(false);
       };
@@ -179,7 +271,7 @@ export function QueryResultsTable({ result }: QueryResultsTableProps) {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "a") {
         event.preventDefault();
         setAllRowsSelected(true);
-        setSelectedCell(null);
+        setSelection(null);
         return;
       }
 
@@ -187,10 +279,8 @@ export function QueryResultsTable({ result }: QueryResultsTableProps) {
         event.preventDefault();
         if (allRowsSelected) {
           copyResultSet(event.shiftKey);
-        } else if (event.shiftKey) {
-          copySelectedRow(true);
-        } else {
-          copySelectedCell();
+        } else if (selection) {
+          copySelectionRange(event.shiftKey);
         }
         return;
       }
@@ -204,13 +294,9 @@ export function QueryResultsTable({ result }: QueryResultsTableProps) {
       } else if (event.key === "ArrowRight") {
         moveSelection(0, 1);
       } else if (event.key === "Home") {
-        event.preventDefault();
-        setSelectedCell({ rowIndex: currentCell.rowIndex, colIndex: 0 });
-        setAllRowsSelected(false);
+        moveSelection(0, 0, 0);
       } else if (event.key === "End") {
-        event.preventDefault();
-        setSelectedCell({ rowIndex: currentCell.rowIndex, colIndex: colCount - 1 });
-        setAllRowsSelected(false);
+        moveSelection(0, 0, colCount - 1);
       }
     },
     [
@@ -218,9 +304,9 @@ export function QueryResultsTable({ result }: QueryResultsTableProps) {
       activeTab,
       allRowsSelected,
       copyResultSet,
-      copySelectedCell,
-      copySelectedRow,
-      selectedCell,
+      copySelectionRange,
+      focusCell,
+      selection,
       visibleRows.length,
     ]
   );
@@ -228,26 +314,51 @@ export function QueryResultsTable({ result }: QueryResultsTableProps) {
   const handleCellContextMenu = useCallback(
     (event: ReactMouseEvent, rowIndex: number, colIndex: number) => {
       event.preventDefault();
-      selectCell(rowIndex, colIndex);
+      // Keep an existing multi-cell selection if the right-click lands inside it;
+      // otherwise select the clicked cell so the copy actions act on it.
+      if (!isInRange(selection, rowIndex, colIndex)) {
+        startSelection(rowIndex, colIndex, false);
+      }
       setContextMenu({ x: event.clientX, y: event.clientY });
     },
-    [selectCell]
+    [selection, startSelection]
   );
+
+  const isMultiCellSelection = useMemo(() => {
+    if (!selection) return false;
+    const { minRow, maxRow, minCol, maxCol } = rangeBounds(selection);
+    return minRow !== maxRow || minCol !== maxCol;
+  }, [selection]);
 
   const contextMenuItems: ContextMenuItem[] = useMemo(
     () => [
-      { type: "action", label: "Copy Cell", onClick: copySelectedCell, disabled: !selectedCell },
+      ...(isMultiCellSelection
+        ? [
+            {
+              type: "action" as const,
+              label: "Copy Selection",
+              onClick: () => copySelectionRange(false),
+            },
+            {
+              type: "action" as const,
+              label: "Copy Selection with Headers",
+              onClick: () => copySelectionRange(true),
+            },
+            { type: "separator" as const },
+          ]
+        : []),
+      { type: "action", label: "Copy Cell", onClick: copySelectedCell, disabled: !focusCell },
       {
         type: "action",
         label: "Copy Row",
         onClick: () => copySelectedRow(false),
-        disabled: !selectedCell,
+        disabled: !focusCell,
       },
       {
         type: "action",
         label: "Copy Row with Headers",
         onClick: () => copySelectedRow(true),
-        disabled: !selectedCell,
+        disabled: !focusCell,
       },
       { type: "separator" },
       {
@@ -255,7 +366,7 @@ export function QueryResultsTable({ result }: QueryResultsTableProps) {
         label: "Select All",
         onClick: () => {
           setAllRowsSelected(true);
-          setSelectedCell(null);
+          setSelection(null);
           gridRef.current?.focus();
         },
       },
@@ -270,7 +381,7 @@ export function QueryResultsTable({ result }: QueryResultsTableProps) {
         onClick: () => copyResultSet(true),
       },
     ],
-    [copyResultSet, copySelectedCell, copySelectedRow, selectedCell]
+    [copyResultSet, copySelectedCell, copySelectedRow, copySelectionRange, focusCell, isMultiCellSelection]
   );
 
   const scrollEndPadding = <div className="h-6 flex-none" aria-hidden="true" />;
@@ -325,10 +436,10 @@ export function QueryResultsTable({ result }: QueryResultsTableProps) {
             )}
             <button
               type="button"
-              onClick={copySelectedCell}
-              disabled={!selectedCell}
+              onClick={() => copySelectionRange(false)}
+              disabled={!selection}
               className="flex items-center gap-1 px-2 py-1 text-text-secondary hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-40"
-              title="Copy selected cell"
+              title={isMultiCellSelection ? "Copy selected cells" : "Copy selected cell"}
             >
               <Copy size={13} />
               Copy
@@ -358,7 +469,9 @@ export function QueryResultsTable({ result }: QueryResultsTableProps) {
       {activeTab === "results" && activeResultSet && (
         <div
           ref={gridRef}
-          className="min-h-0 flex-1 overflow-auto focus:outline-none"
+          className={`min-h-0 flex-1 overflow-auto focus:outline-none ${
+            isDragging ? "select-none" : ""
+          }`}
           tabIndex={0}
           role="grid"
           aria-label="Query results"
@@ -385,32 +498,51 @@ export function QueryResultsTable({ result }: QueryResultsTableProps) {
                   className={`${allRowsSelected ? "bg-accent/10" : "hover:bg-bg-secondary"}`}
                   aria-selected={allRowsSelected}
                 >
-                  {row.map((cell, colIndex) => (
-                    <td
-                      key={colIndex}
-                      role="gridcell"
-                      aria-selected={
-                        allRowsSelected ||
-                        (selectedCell?.rowIndex === rowIndex &&
-                          selectedCell.colIndex === colIndex)
-                      }
-                      tabIndex={-1}
-                      onClick={() => selectCell(rowIndex, colIndex)}
-                      onContextMenu={(event) =>
-                        handleCellContextMenu(event, rowIndex, colIndex)
-                      }
-                      className={`whitespace-nowrap border-b border-r border-bg-tertiary px-2 py-0.5 text-text-primary ${
-                        selectedCell?.rowIndex === rowIndex &&
-                        selectedCell.colIndex === colIndex
-                          ? "bg-accent/20 outline outline-1 -outline-offset-1 outline-accent"
-                          : allRowsSelected
-                            ? "bg-accent/10"
-                            : ""
-                      }`}
-                    >
-                      {formatCell(cell)}
-                    </td>
-                  ))}
+                  {row.map((cell, colIndex) => {
+                    const isFocus =
+                      focusCell?.rowIndex === rowIndex &&
+                      focusCell.colIndex === colIndex;
+                    const inRange = isInRange(selection, rowIndex, colIndex);
+                    return (
+                      <td
+                        key={colIndex}
+                        role="gridcell"
+                        aria-selected={allRowsSelected || inRange}
+                        tabIndex={-1}
+                        onMouseDown={(event) => {
+                          // Left button only; preventDefault stops native text
+                          // selection so the drag paints a clean cell rectangle.
+                          if (event.button !== 0) return;
+                          event.preventDefault();
+                          isDraggingRef.current = true;
+                          setIsDragging(true);
+                          startSelection(rowIndex, colIndex, event.shiftKey);
+                        }}
+                        onMouseEnter={() => {
+                          if (!isDraggingRef.current) return;
+                          setSelection((prev) =>
+                            prev
+                              ? { anchor: prev.anchor, focus: { rowIndex, colIndex } }
+                              : prev
+                          );
+                        }}
+                        onContextMenu={(event) =>
+                          handleCellContextMenu(event, rowIndex, colIndex)
+                        }
+                        className={`whitespace-nowrap border-b border-r border-bg-tertiary px-2 py-0.5 text-text-primary ${
+                          isFocus
+                            ? "bg-accent/20 outline outline-1 -outline-offset-1 outline-accent"
+                            : inRange
+                              ? "bg-accent/20"
+                              : allRowsSelected
+                                ? "bg-accent/10"
+                                : ""
+                        }`}
+                      >
+                        {formatCell(cell)}
+                      </td>
+                    );
+                  })}
                 </tr>
               ))}
             </tbody>
