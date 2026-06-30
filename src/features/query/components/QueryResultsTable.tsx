@@ -133,7 +133,10 @@ export function QueryResultsTable({ result }: QueryResultsTableProps) {
     setSelection(null);
     setAllRowsSelected(false);
     setContextMenu(null);
-  }, [activeResultSetIndex, activeTab]);
+    // activeResultSet is included so a fresh query execution (which swaps the
+    // result while index/tab stay the same) clears any stale, now-out-of-bounds
+    // selection instead of leaving it active on the new grid.
+  }, [activeResultSetIndex, activeTab, activeResultSet]);
 
   // End a drag even if the pointer is released outside the grid.
   useEffect(() => {

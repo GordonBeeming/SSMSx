@@ -56,10 +56,12 @@ function App() {
 
   const createNewTab = useCallback(() => {
     const activeTab = tabs.find((t) => t.id === activeTabId);
-    // Prefer the connection of the tab the user is on; fall back to the first
-    // active connection so a new query opens against something sensible.
+    // Prefer the connection of the tab the user is on, but only if it's still
+    // active — a disconnected connection lingers in `connections`, and binding a
+    // new tab to it would make executeQuery reject the tab. Fall back to the
+    // first active connection so a new query always opens against a live one.
     const sourceConn =
-      connections.find((c) => c.id === activeTab?.connectionId) ?? activeConnections[0];
+      activeConnections.find((c) => c.id === activeTab?.connectionId) ?? activeConnections[0];
     if (!sourceConn) return;
 
     // Inherit the active tab's database only when it belongs to the same
@@ -79,7 +81,7 @@ function App() {
       title: `Query ${tabCounter}`,
       connectionColor: sourceConn.color,
     });
-  }, [tabs, activeTabId, connections, activeConnections, addTab]);
+  }, [tabs, activeTabId, activeConnections, addTab]);
 
   // Hold the latest callbacks so the native-menu listeners (registered once on
   // mount) always invoke the current implementation without re-registering.
@@ -88,7 +90,7 @@ function App() {
   useEffect(() => {
     createNewTabRef.current = createNewTab;
     openDialogRef.current = openDialog;
-  });
+  }, [createNewTab, openDialog]);
 
   const persistQuerySession = useCallback(() => {
     const queryStore = useQueryStore.getState();
