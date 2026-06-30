@@ -569,9 +569,10 @@ export function QueryResultsTable({ result }: QueryResultsTableProps) {
         />
       )}
 
-      {/* Messages */}
+      {/* Messages — select-text re-enables text selection here (body sets
+          user-select: none) so message/error text can be selected and copied. */}
       {activeTab === "messages" && hasMessages && (
-        <div className="min-h-0 flex-1 overflow-auto p-2">
+        <div className="min-h-0 flex-1 overflow-auto select-text p-2">
           {result.messages.map((msg, i) => (
             <div
               key={i}
