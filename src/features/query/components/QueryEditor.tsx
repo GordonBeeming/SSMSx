@@ -126,6 +126,9 @@ export function QueryEditor({
         insertSpaces: true,
         suggestOnTriggerCharacters: true,
         quickSuggestions: true,
+        // Keep line 1 off the top edge — Monaco renders it flush against the
+        // viewport top and the overflow-hidden wrapper clips the glyph tops.
+        padding: { top: 8 },
       }}
     />
   );
