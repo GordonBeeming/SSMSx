@@ -8,10 +8,11 @@ import { loader } from "@monaco-editor/react";
 // Only the base editor worker is needed — we use Monaco for SQL editing with a
 // custom completion provider, not the JSON/TS/CSS language services.
 //
-// monaco-editor declares MonacoEnvironment as an ambient global binding (not a
-// property of Window), so assign it directly rather than via `self` — Monaco
-// reads getWorker from it to locate its web worker.
-MonacoEnvironment = {
+// monaco-editor's `declare global { var MonacoEnvironment }` is ambient (type-only),
+// so a bare `MonacoEnvironment = …` assignment has no runtime binding and throws
+// ReferenceError under ESM strict mode, crashing app startup. Assign onto the real
+// global object instead — Monaco reads getWorker from it to locate its web worker.
+globalThis.MonacoEnvironment = {
   getWorker: (_workerId: string, _label: string) => new editorWorker(),
 };
 
