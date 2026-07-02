@@ -13,29 +13,29 @@
     "smoke:tauri-mcp": "node scripts/smoke-tauri-mcp.mjs"
   },
   "dependencies": {
-    "@monaco-editor/react": "^4.7.0",
-    "@tailwindcss/vite": "^4.2.1",
-    "@tanstack/react-virtual": "^3.13.23",
-    "@tauri-apps/api": "^2",
-    "@tauri-apps/plugin-shell": "^2",
-    "@xyflow/react": "^12.10.2",
-    "dagre": "^0.8.5",
-    "lucide-react": "^1.16.0",
-    "monaco-editor": "^0.55.1",
-    "react": "^19",
-    "react-dom": "^19",
-    "tailwindcss": "^4.2.1",
-    "zustand": "^5.0.12"
+    "@monaco-editor/react": "4.7.0",
+    "@tailwindcss/vite": "4.2.1",
+    "@tanstack/react-virtual": "3.13.23",
+    "@tauri-apps/api": "2.10.1",
+    "@tauri-apps/plugin-shell": "2.3.5",
+    "@xyflow/react": "12.10.2",
+    "dagre": "0.8.5",
+    "lucide-react": "1.16.0",
+    "monaco-editor": "0.55.1",
+    "react": "19.2.4",
+    "react-dom": "19.2.4",
+    "tailwindcss": "4.2.1",
+    "zustand": "5.0.12"
   },
   "devDependencies": {
-    "@playwright/test": "^1.60.0",
-    "@tauri-apps/cli": "^2.11.2",
-    "@types/dagre": "^0.7.54",
-    "@types/react": "^19",
-    "@types/react-dom": "^19",
-    "@vitejs/plugin-react": "^4",
-    "typescript": "^5.7",
-    "vite": "^6"
+    "@playwright/test": "1.60.0",
+    "@tauri-apps/cli": "2.11.2",
+    "@types/dagre": "0.7.54",
+    "@types/react": "19.2.14",
+    "@types/react-dom": "19.2.3",
+    "@vitejs/plugin-react": "4.7.0",
+    "typescript": "5.9.3",
+    "vite": "6.4.3"
   },
   "overrides": {
     "dompurify": "3.4.11"
