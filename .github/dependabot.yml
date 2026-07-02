@@ -4,18 +4,29 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+    # Never propose a version less than 7 days old — dodges freshly-published
+    # broken/compromised releases. Cooldown applies to version updates only, so
+    # security updates still come through immediately.
+    cooldown:
+      default-days: 7
 
   - package-ecosystem: "cargo"
     directory: "/src-tauri"
     schedule:
       interval: "weekly"
+    cooldown:
+      default-days: 7
 
   - package-ecosystem: "nuget"
     directory: "/sidecar"
     schedule:
       interval: "weekly"
+    cooldown:
+      default-days: 7
 
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
       interval: "weekly"
+    cooldown:
+      default-days: 7
