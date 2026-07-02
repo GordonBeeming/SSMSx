@@ -14,7 +14,7 @@
   },
   "dependencies": {
     "@monaco-editor/react": "4.7.0",
-    "@tailwindcss/vite": "4.2.1",
+    "@tailwindcss/vite": "4.3.1",
     "@tanstack/react-virtual": "3.13.23",
     "@tauri-apps/api": "2.10.1",
     "@tauri-apps/plugin-shell": "2.3.5",
