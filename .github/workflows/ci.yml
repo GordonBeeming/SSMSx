@@ -158,7 +158,16 @@ jobs:
         shell: bash
         run: |
           cd src-tauri
-          cargo audit --db "$HOME/.cargo/advisory-db" --no-fetch
+          # RUSTSEC-2026-0194 / -0195: quadratic-parse and namespace-allocation
+          # DoS in quick-xml <0.41. It reaches us only transitively via
+          # tauri -> plist (Apple bundle/Info.plist parsing at build/bundle time,
+          # never attacker-controlled runtime XML), and plist 1.8.0 pins
+          # quick-xml ^0.38 so there's no upstream fix to pull yet. Ignore these
+          # two IDs only — every other advisory still fails the build. Drop this
+          # once a tauri/plist release moves to quick-xml >=0.41.
+          cargo audit --db "$HOME/.cargo/advisory-db" --no-fetch \
+            --ignore RUSTSEC-2026-0194 \
+            --ignore RUSTSEC-2026-0195
 
       # ── Tauri CLI ──────────────────────────────────────────────
       - name: Install Tauri CLI
