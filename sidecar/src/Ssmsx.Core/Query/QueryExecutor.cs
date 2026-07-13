@@ -160,7 +160,8 @@ public class QueryExecutor
                         await onBatch(batch);
                     }
 
-                    resultSetIndex++;
+                    if (columns.Count > 0)
+                        resultSetIndex++;
                 }
                 while (await reader.NextResultAsync(ct));
             }
@@ -251,16 +252,19 @@ public class QueryExecutor
             var separator = !inString && blockCommentDepth == 0
                 ? BatchSeparator.Match(line)
                 : Match.Empty;
-            var repeatCount = 1;
-            if (separator.Success &&
-                (!separator.Groups["count"].Success || int.TryParse(separator.Groups["count"].Value, out repeatCount)))
+            if (separator.Success)
             {
+                var count = separator.Groups["count"];
+                var repeatCount = 1;
+                if (count.Success && !int.TryParse(count.Value, out repeatCount))
+                    throw new InvalidOperationException($"GO repeat count '{count.Value}' exceeds the supported maximum of {int.MaxValue}.");
+
                 AddBatch(batches, currentBatch, repeatCount);
                 continue;
             }
 
             if (currentBatch.Length > 0)
-                currentBatch.AppendLine();
+                currentBatch.Append('\n');
             currentBatch.Append(line);
             TrackSqlState(line, ref inString, ref blockCommentDepth);
         }
