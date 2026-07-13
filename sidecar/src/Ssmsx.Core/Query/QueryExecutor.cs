@@ -241,15 +241,33 @@ public class QueryExecutor
 
     internal static IEnumerable<string> SplitBatches(string sql)
     {
-        var batches = new List<string>();
         var currentBatch = new StringBuilder();
         var inString = false;
+        var inBracketedIdentifier = false;
+        var inDoubleQuotedIdentifier = false;
         var blockCommentDepth = 0;
 
-        using var reader = new StringReader(sql);
-        while (reader.ReadLine() is { } line)
+        for (var lineStart = 0; lineStart < sql.Length;)
         {
-            var separator = !inString && blockCommentDepth == 0
+            var lineEnd = sql.IndexOfAny(['\r', '\n'], lineStart);
+            var line = lineEnd < 0 ? sql[lineStart..] : sql[lineStart..lineEnd];
+            var newline = "";
+            if (lineEnd < 0)
+            {
+                lineStart = sql.Length;
+            }
+            else if (sql[lineEnd] == '\r' && lineEnd + 1 < sql.Length && sql[lineEnd + 1] == '\n')
+            {
+                newline = "\r\n";
+                lineStart = lineEnd + 2;
+            }
+            else
+            {
+                newline = sql[lineEnd].ToString();
+                lineStart = lineEnd + 1;
+            }
+
+            var separator = !inString && !inBracketedIdentifier && !inDoubleQuotedIdentifier && blockCommentDepth == 0
                 ? BatchSeparator.Match(line)
                 : Match.Empty;
             if (separator.Success)
@@ -259,32 +277,31 @@ public class QueryExecutor
                 if (count.Success && !int.TryParse(count.Value, out repeatCount))
                     throw new InvalidOperationException($"GO repeat count '{count.Value}' exceeds the supported maximum of {int.MaxValue}.");
 
-                AddBatch(batches, currentBatch, repeatCount);
+                var batch = currentBatch.ToString();
+                if (!string.IsNullOrWhiteSpace(batch))
+                {
+                    for (var i = 0; i < repeatCount; i++)
+                        yield return batch;
+                }
+                currentBatch.Clear();
                 continue;
             }
 
-            if (currentBatch.Length > 0)
-                currentBatch.Append('\n');
-            currentBatch.Append(line);
-            TrackSqlState(line, ref inString, ref blockCommentDepth);
+            currentBatch.Append(line).Append(newline);
+            TrackSqlState(line, ref inString, ref inBracketedIdentifier, ref inDoubleQuotedIdentifier, ref blockCommentDepth);
         }
 
-        AddBatch(batches, currentBatch, 1);
-        return batches;
+        var finalBatch = currentBatch.ToString();
+        if (!string.IsNullOrWhiteSpace(finalBatch))
+            yield return finalBatch;
     }
 
-    private static void AddBatch(List<string> batches, StringBuilder batch, int repeatCount)
-    {
-        var sql = batch.ToString();
-        if (!string.IsNullOrWhiteSpace(sql))
-        {
-            for (var i = 0; i < repeatCount; i++)
-                batches.Add(sql);
-        }
-        batch.Clear();
-    }
-
-    private static void TrackSqlState(string line, ref bool inString, ref int blockCommentDepth)
+    private static void TrackSqlState(
+        string line,
+        ref bool inString,
+        ref bool inBracketedIdentifier,
+        ref bool inDoubleQuotedIdentifier,
+        ref int blockCommentDepth)
     {
         for (var i = 0; i < line.Length; i++)
         {
@@ -296,6 +313,28 @@ public class QueryExecutor
                     i++;
                 else
                     inString = false;
+                continue;
+            }
+
+            if (inBracketedIdentifier)
+            {
+                if (line[i] != ']')
+                    continue;
+                if (i + 1 < line.Length && line[i + 1] == ']')
+                    i++;
+                else
+                    inBracketedIdentifier = false;
+                continue;
+            }
+
+            if (inDoubleQuotedIdentifier)
+            {
+                if (line[i] != '"')
+                    continue;
+                if (i + 1 < line.Length && line[i + 1] == '"')
+                    i++;
+                else
+                    inDoubleQuotedIdentifier = false;
                 continue;
             }
 
@@ -324,6 +363,14 @@ public class QueryExecutor
             else if (line[i] == '\'')
             {
                 inString = true;
+            }
+            else if (line[i] == '[')
+            {
+                inBracketedIdentifier = true;
+            }
+            else if (line[i] == '"')
+            {
+                inDoubleQuotedIdentifier = true;
             }
         }
     }
