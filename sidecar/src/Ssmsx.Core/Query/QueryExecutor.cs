@@ -1,5 +1,6 @@
 using System.Data.SqlTypes;
 using System.Diagnostics;
+using System.Text.RegularExpressions;
 using Microsoft.Data.SqlClient;
 using Ssmsx.Core.Connections;
 using Ssmsx.Protocol.Messages;
@@ -13,6 +14,10 @@ namespace Ssmsx.Core.Query;
 /// </summary>
 public class QueryExecutor
 {
+    private static readonly Regex BatchSeparator = new(
+        @"^[\t ]*GO[\t ]*(?:--[^\r\n]*)?\r?$",
+        RegexOptions.IgnoreCase | RegexOptions.Multiline | RegexOptions.CultureInvariant);
+
     private readonly ConnectionManager _connectionManager;
     private readonly QueryCancellationManager _cancellationManager;
 
@@ -86,73 +91,74 @@ public class QueryExecutor
         try
         {
             connection.ChangeDatabase(database);
-
-            await using var cmd = new SqlCommand(sql, connection)
-            {
-                CommandTimeout = DefaultCommandTimeoutSeconds
-            };
-
-            _cancellationManager.SetCommand(queryId, cmd);
-
             stopwatch.Start();
-
-            await using var reader = await cmd.ExecuteReaderAsync(ct);
-
             int resultSetIndex = 0;
 
-            do
+            foreach (var batchSql in SplitBatches(sql))
             {
-                // Read column metadata for this result set
-                var columns = ReadColumnMetadata(reader);
-                bool isFirstBatchForResultSet = true;
-
-                var rowBuffer = new List<List<object?>>();
-
-                while (await reader.ReadAsync(ct))
+                await using var cmd = new SqlCommand(batchSql, connection)
                 {
-                    var row = ReadRow(reader);
-                    rowBuffer.Add(row);
-                    totalRows++;
+                    CommandTimeout = DefaultCommandTimeoutSeconds
+                };
 
-                    if (rowBuffer.Count >= BatchSize)
+                _cancellationManager.SetCommand(queryId, cmd);
+
+                await using var reader = await cmd.ExecuteReaderAsync(ct);
+
+                do
+                {
+                    // Read column metadata for this result set
+                    var columns = ReadColumnMetadata(reader);
+                    bool isFirstBatchForResultSet = true;
+
+                    var rowBuffer = new List<List<object?>>();
+
+                    while (await reader.ReadAsync(ct))
+                    {
+                        var row = ReadRow(reader);
+                        rowBuffer.Add(row);
+                        totalRows++;
+
+                        if (rowBuffer.Count >= BatchSize)
+                        {
+                            batchNumber++;
+                            var batch = new QueryExecuteResult
+                            {
+                                QueryId = queryId,
+                                Columns = isFirstBatchForResultSet ? columns : null,
+                                Rows = rowBuffer,
+                                Batch = batchNumber,
+                                Done = false,
+                                ResultSetIndex = resultSetIndex
+                            };
+
+                            await onBatch(batch);
+                            rowBuffer = new List<List<object?>>();
+                            isFirstBatchForResultSet = false;
+                        }
+                    }
+
+                    // Send remaining rows for this result set (or an empty batch with columns if no rows)
+                    if (rowBuffer.Count > 0 || isFirstBatchForResultSet)
                     {
                         batchNumber++;
                         var batch = new QueryExecuteResult
                         {
                             QueryId = queryId,
                             Columns = isFirstBatchForResultSet ? columns : null,
-                            Rows = rowBuffer,
+                            Rows = rowBuffer.Count > 0 ? rowBuffer : null,
                             Batch = batchNumber,
                             Done = false,
                             ResultSetIndex = resultSetIndex
                         };
 
                         await onBatch(batch);
-                        rowBuffer = new List<List<object?>>();
-                        isFirstBatchForResultSet = false;
                     }
+
+                    resultSetIndex++;
                 }
-
-                // Send remaining rows for this result set (or an empty batch with columns if no rows)
-                if (rowBuffer.Count > 0 || isFirstBatchForResultSet)
-                {
-                    batchNumber++;
-                    var batch = new QueryExecuteResult
-                    {
-                        QueryId = queryId,
-                        Columns = isFirstBatchForResultSet ? columns : null,
-                        Rows = rowBuffer.Count > 0 ? rowBuffer : null,
-                        Batch = batchNumber,
-                        Done = false,
-                        ResultSetIndex = resultSetIndex
-                    };
-
-                    await onBatch(batch);
-                }
-
-                resultSetIndex++;
+                while (await reader.NextResultAsync(ct));
             }
-            while (await reader.NextResultAsync(ct));
 
             stopwatch.Stop();
 
@@ -165,7 +171,8 @@ public class QueryExecutor
                 Done = true,
                 ExecutionTimeMs = stopwatch.ElapsedMilliseconds,
                 TotalRows = totalRows,
-                Messages = messages.Count > 0 ? messages : null
+                Messages = messages.Count > 0 ? messages : null,
+                Database = connection.Database
             };
 
             await onBatch(finalBatch);
@@ -188,7 +195,8 @@ public class QueryExecutor
                 Done = true,
                 ExecutionTimeMs = stopwatch.ElapsedMilliseconds,
                 TotalRows = totalRows,
-                Messages = messages.Count > 0 ? messages : null
+                Messages = messages.Count > 0 ? messages : null,
+                Database = connection.Database
             };
 
             await onBatch(cancelledBatch);
@@ -212,7 +220,8 @@ public class QueryExecutor
                 Done = true,
                 ExecutionTimeMs = stopwatch.ElapsedMilliseconds,
                 TotalRows = totalRows,
-                Messages = messages.Count > 0 ? messages : null
+                Messages = messages.Count > 0 ? messages : null,
+                Database = connection.Database
             };
 
             await onBatch(cancelledBatch);
@@ -223,6 +232,9 @@ public class QueryExecutor
             _cancellationManager.Remove(queryId);
         }
     }
+
+    internal static IEnumerable<string> SplitBatches(string sql) =>
+        BatchSeparator.Split(sql).Where(batch => !string.IsNullOrWhiteSpace(batch));
 
     /// <summary>
     /// Reads column metadata from the current result set of a SqlDataReader.

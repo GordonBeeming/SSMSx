@@ -51,6 +51,7 @@ export interface QueryBatchPayload {
   totalRows?: number;
   messages?: QueryMessage[];
   resultSetIndex?: number;
+  database?: string;
 }
 
 /** Payload for query:error events */
