@@ -16,7 +16,7 @@ namespace Ssmsx.Core.Query;
 public class QueryExecutor
 {
     private static readonly Regex BatchSeparator = new(
-        @"^[\t ]*GO[\t ]*(?:--[^\r\n]*)?\r?$",
+        @"^[\t ]*GO(?:[\t ]+(?<count>[1-9][0-9]*))?[\t ]*(?:--[^\r\n]*)?\r?$",
         RegexOptions.IgnoreCase | RegexOptions.Multiline | RegexOptions.CultureInvariant);
 
     private readonly ConnectionManager _connectionManager;
@@ -248,9 +248,14 @@ public class QueryExecutor
         using var reader = new StringReader(sql);
         while (reader.ReadLine() is { } line)
         {
-            if (!inString && blockCommentDepth == 0 && BatchSeparator.IsMatch(line))
+            var separator = !inString && blockCommentDepth == 0
+                ? BatchSeparator.Match(line)
+                : Match.Empty;
+            var repeatCount = 1;
+            if (separator.Success &&
+                (!separator.Groups["count"].Success || int.TryParse(separator.Groups["count"].Value, out repeatCount)))
             {
-                AddBatch(batches, currentBatch);
+                AddBatch(batches, currentBatch, repeatCount);
                 continue;
             }
 
@@ -260,14 +265,18 @@ public class QueryExecutor
             TrackSqlState(line, ref inString, ref blockCommentDepth);
         }
 
-        AddBatch(batches, currentBatch);
+        AddBatch(batches, currentBatch, 1);
         return batches;
     }
 
-    private static void AddBatch(List<string> batches, StringBuilder batch)
+    private static void AddBatch(List<string> batches, StringBuilder batch, int repeatCount)
     {
-        if (!string.IsNullOrWhiteSpace(batch.ToString()))
-            batches.Add(batch.ToString());
+        var sql = batch.ToString();
+        if (!string.IsNullOrWhiteSpace(sql))
+        {
+            for (var i = 0; i < repeatCount; i++)
+                batches.Add(sql);
+        }
         batch.Clear();
     }
 
