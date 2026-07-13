@@ -10,7 +10,9 @@ public class QueryExecutorTests
     {
         const string sql = "SELECT '\nGO\n' AS Value\nGO\n/*\nGO\n*/\nSELECT 2\n go -- next batch\nSELECT 3\nGO 2";
 
-        var batches = QueryExecutor.SplitBatches(sql).Select(batch => batch.Trim()).ToArray();
+        var batches = QueryExecutor.SplitBatches(sql)
+            .Select(batch => batch.Trim().ReplaceLineEndings("\n"))
+            .ToArray();
 
         Assert.Equal(["SELECT '\nGO\n' AS Value", "/*\nGO\n*/\nSELECT 2", "SELECT 3", "SELECT 3"], batches);
     }
