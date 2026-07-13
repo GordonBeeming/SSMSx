@@ -23,6 +23,8 @@ interface TabExecutionInfo {
   queryId: string | null;
   requestId: string | null;
   startTime: number | null;
+  databaseContext?: string;
+  databaseSyncEnabled?: boolean;
 }
 
 interface SavedQuerySession {
@@ -469,6 +471,8 @@ export const useQueryStore = create<QueryState>((set, get) => ({
           queryId: requestId,
           requestId,
           startTime: Date.now(),
+          databaseContext: tab.database,
+          databaseSyncEnabled: true,
         },
       },
       results: {
@@ -528,6 +532,17 @@ export const useQueryStore = create<QueryState>((set, get) => ({
 
     set((s) => {
       const existing = s.results[tabId] ?? emptyResult();
+      const execution = s.executionInfo[tabId];
+      const currentTab = s.tabs.find((tab) => tab.id === tabId);
+      const databaseSyncEnabled =
+        execution?.databaseSyncEnabled !== false &&
+        currentTab?.database === execution?.databaseContext;
+      const tabs =
+        database &&
+        databaseSyncEnabled &&
+        currentTab?.database !== database
+          ? s.tabs.map((tab) => (tab.id === tabId ? { ...tab, database } : tab))
+          : s.tabs;
       const hasResultData =
         (payload.columns && payload.columns.length > 0) ||
         (payload.rows && payload.rows.length > 0);
@@ -546,15 +561,14 @@ export const useQueryStore = create<QueryState>((set, get) => ({
       ];
 
       return {
-        tabs:
-          database && s.tabs.some((tab) => tab.id === tabId && tab.database !== database)
-            ? s.tabs.map((tab) => (tab.id === tabId ? { ...tab, database } : tab))
-            : s.tabs,
+        tabs,
         executionInfo: {
           ...s.executionInfo,
           [tabId]: {
             ...s.executionInfo[tabId],
             queryId: payload.queryId,
+            databaseContext: database ?? execution?.databaseContext,
+            databaseSyncEnabled,
           },
         },
         results: {
@@ -579,6 +593,17 @@ export const useQueryStore = create<QueryState>((set, get) => ({
 
     set((s) => {
       const existing = s.results[tabId] ?? emptyResult();
+      const execution = s.executionInfo[tabId];
+      const currentTab = s.tabs.find((tab) => tab.id === tabId);
+      const databaseSyncEnabled =
+        execution?.databaseSyncEnabled !== false &&
+        currentTab?.database === execution?.databaseContext;
+      const tabs =
+        database &&
+        databaseSyncEnabled &&
+        currentTab?.database !== database
+          ? s.tabs.map((tab) => (tab.id === tabId ? { ...tab, database } : tab))
+          : s.tabs;
       const hasResultData =
         (payload.columns && payload.columns.length > 0) ||
         (payload.rows && payload.rows.length > 0);
@@ -603,16 +628,15 @@ export const useQueryStore = create<QueryState>((set, get) => ({
       );
 
       return {
-        tabs:
-          database && s.tabs.some((tab) => tab.id === tabId && tab.database !== database)
-            ? s.tabs.map((tab) => (tab.id === tabId ? { ...tab, database } : tab))
-            : s.tabs,
+        tabs,
         executionInfo: {
           ...s.executionInfo,
           [tabId]: {
             ...s.executionInfo[tabId],
             state: isCancelled ? "cancelled" : "completed",
             startTime: null,
+            databaseContext: database ?? execution?.databaseContext,
+            databaseSyncEnabled,
           },
         },
         results: {
