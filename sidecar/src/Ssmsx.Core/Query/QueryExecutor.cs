@@ -1,5 +1,6 @@
 using System.Data.SqlTypes;
 using System.Diagnostics;
+using System.Text;
 using System.Text.RegularExpressions;
 using Microsoft.Data.SqlClient;
 using Ssmsx.Core.Connections;
@@ -237,9 +238,82 @@ public class QueryExecutor
         }
     }
 
-    // ponytail: Line-based parsing covers normal scripts; use a T-SQL lexer if multiline literals need GO-only lines.
-    internal static IEnumerable<string> SplitBatches(string sql) =>
-        BatchSeparator.Split(sql).Where(batch => !string.IsNullOrWhiteSpace(batch));
+    internal static IEnumerable<string> SplitBatches(string sql)
+    {
+        var batches = new List<string>();
+        var currentBatch = new StringBuilder();
+        var inString = false;
+        var blockCommentDepth = 0;
+
+        using var reader = new StringReader(sql);
+        while (reader.ReadLine() is { } line)
+        {
+            if (!inString && blockCommentDepth == 0 && BatchSeparator.IsMatch(line))
+            {
+                AddBatch(batches, currentBatch);
+                continue;
+            }
+
+            if (currentBatch.Length > 0)
+                currentBatch.AppendLine();
+            currentBatch.Append(line);
+            TrackSqlState(line, ref inString, ref blockCommentDepth);
+        }
+
+        AddBatch(batches, currentBatch);
+        return batches;
+    }
+
+    private static void AddBatch(List<string> batches, StringBuilder batch)
+    {
+        if (!string.IsNullOrWhiteSpace(batch.ToString()))
+            batches.Add(batch.ToString());
+        batch.Clear();
+    }
+
+    private static void TrackSqlState(string line, ref bool inString, ref int blockCommentDepth)
+    {
+        for (var i = 0; i < line.Length; i++)
+        {
+            if (inString)
+            {
+                if (line[i] != '\'')
+                    continue;
+                if (i + 1 < line.Length && line[i + 1] == '\'')
+                    i++;
+                else
+                    inString = false;
+                continue;
+            }
+
+            if (blockCommentDepth > 0)
+            {
+                if (i + 1 < line.Length && line[i] == '/' && line[i + 1] == '*')
+                {
+                    blockCommentDepth++;
+                    i++;
+                }
+                else if (i + 1 < line.Length && line[i] == '*' && line[i + 1] == '/')
+                {
+                    blockCommentDepth--;
+                    i++;
+                }
+                continue;
+            }
+
+            if (i + 1 < line.Length && line[i] == '-' && line[i + 1] == '-')
+                return;
+            if (i + 1 < line.Length && line[i] == '/' && line[i + 1] == '*')
+            {
+                blockCommentDepth++;
+                i++;
+            }
+            else if (line[i] == '\'')
+            {
+                inString = true;
+            }
+        }
+    }
 
     /// <summary>
     /// Reads column metadata from the current result set of a SqlDataReader.
