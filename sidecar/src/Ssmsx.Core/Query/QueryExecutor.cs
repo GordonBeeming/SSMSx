@@ -1,5 +1,7 @@
 using System.Data.SqlTypes;
 using System.Diagnostics;
+using System.Text;
+using System.Text.RegularExpressions;
 using Microsoft.Data.SqlClient;
 using Ssmsx.Core.Connections;
 using Ssmsx.Protocol.Messages;
@@ -13,6 +15,12 @@ namespace Ssmsx.Core.Query;
 /// </summary>
 public class QueryExecutor
 {
+    private static readonly char[] NewlineCharacters = ['\r', '\n'];
+
+    private static readonly Regex BatchSeparator = new(
+        @"^[\t ]*GO(?:[\t ]+(?<count>[1-9][0-9]*))?[\t ]*(?:/\*(?:[^*]|\*(?!/))*\*/[\t ]*)*(?:--[^\r\n]*)?\r?$",
+        RegexOptions.IgnoreCase | RegexOptions.Multiline | RegexOptions.CultureInvariant);
+
     private readonly ConnectionManager _connectionManager;
     private readonly QueryCancellationManager _cancellationManager;
 
@@ -86,73 +94,79 @@ public class QueryExecutor
         try
         {
             connection.ChangeDatabase(database);
-
-            await using var cmd = new SqlCommand(sql, connection)
+            stopwatch.Start();
+            int resultSetIndex = 0;
+            await using var cmd = new SqlCommand
             {
+                Connection = connection,
                 CommandTimeout = DefaultCommandTimeoutSeconds
             };
-
             _cancellationManager.SetCommand(queryId, cmd);
 
-            stopwatch.Start();
-
-            await using var reader = await cmd.ExecuteReaderAsync(ct);
-
-            int resultSetIndex = 0;
-
-            do
+            foreach (var batchSql in SplitBatches(sql))
             {
-                // Read column metadata for this result set
-                var columns = ReadColumnMetadata(reader);
-                bool isFirstBatchForResultSet = true;
+                ct.ThrowIfCancellationRequested();
+                cmd.CommandText = batchSql;
 
-                var rowBuffer = new List<List<object?>>();
+                await using var reader = await cmd.ExecuteReaderAsync(ct);
 
-                while (await reader.ReadAsync(ct))
+                do
                 {
-                    var row = ReadRow(reader);
-                    rowBuffer.Add(row);
-                    totalRows++;
+                    // Read column metadata for this result set
+                    var columns = ReadColumnMetadata(reader);
+                    bool isFirstBatchForResultSet = true;
 
-                    if (rowBuffer.Count >= BatchSize)
+                    var rowBuffer = new List<List<object?>>();
+
+                    while (await reader.ReadAsync(ct))
+                    {
+                        var row = ReadRow(reader);
+                        rowBuffer.Add(row);
+                        totalRows++;
+
+                        if (rowBuffer.Count >= BatchSize)
+                        {
+                            batchNumber++;
+                            var batch = new QueryExecuteResult
+                            {
+                                QueryId = queryId,
+                                Columns = isFirstBatchForResultSet ? columns : null,
+                                Rows = rowBuffer,
+                                Batch = batchNumber,
+                                Done = false,
+                                ResultSetIndex = resultSetIndex,
+                                Database = connection.Database
+                            };
+
+                            await onBatch(batch);
+                            rowBuffer = new List<List<object?>>();
+                            isFirstBatchForResultSet = false;
+                        }
+                    }
+
+                    // Send remaining rows for this result set (or an empty batch with columns if no rows)
+                    if (rowBuffer.Count > 0 || isFirstBatchForResultSet)
                     {
                         batchNumber++;
                         var batch = new QueryExecuteResult
                         {
                             QueryId = queryId,
                             Columns = isFirstBatchForResultSet ? columns : null,
-                            Rows = rowBuffer,
+                            Rows = rowBuffer.Count > 0 ? rowBuffer : null,
                             Batch = batchNumber,
                             Done = false,
-                            ResultSetIndex = resultSetIndex
+                            ResultSetIndex = resultSetIndex,
+                            Database = connection.Database
                         };
 
                         await onBatch(batch);
-                        rowBuffer = new List<List<object?>>();
-                        isFirstBatchForResultSet = false;
                     }
+
+                    if (columns.Count > 0)
+                        resultSetIndex++;
                 }
-
-                // Send remaining rows for this result set (or an empty batch with columns if no rows)
-                if (rowBuffer.Count > 0 || isFirstBatchForResultSet)
-                {
-                    batchNumber++;
-                    var batch = new QueryExecuteResult
-                    {
-                        QueryId = queryId,
-                        Columns = isFirstBatchForResultSet ? columns : null,
-                        Rows = rowBuffer.Count > 0 ? rowBuffer : null,
-                        Batch = batchNumber,
-                        Done = false,
-                        ResultSetIndex = resultSetIndex
-                    };
-
-                    await onBatch(batch);
-                }
-
-                resultSetIndex++;
+                while (await reader.NextResultAsync(ct));
             }
-            while (await reader.NextResultAsync(ct));
 
             stopwatch.Stop();
 
@@ -165,7 +179,8 @@ public class QueryExecutor
                 Done = true,
                 ExecutionTimeMs = stopwatch.ElapsedMilliseconds,
                 TotalRows = totalRows,
-                Messages = messages.Count > 0 ? messages : null
+                Messages = messages.Count > 0 ? messages : null,
+                Database = connection.Database
             };
 
             await onBatch(finalBatch);
@@ -188,7 +203,8 @@ public class QueryExecutor
                 Done = true,
                 ExecutionTimeMs = stopwatch.ElapsedMilliseconds,
                 TotalRows = totalRows,
-                Messages = messages.Count > 0 ? messages : null
+                Messages = messages.Count > 0 ? messages : null,
+                Database = connection.Database
             };
 
             await onBatch(cancelledBatch);
@@ -212,7 +228,8 @@ public class QueryExecutor
                 Done = true,
                 ExecutionTimeMs = stopwatch.ElapsedMilliseconds,
                 TotalRows = totalRows,
-                Messages = messages.Count > 0 ? messages : null
+                Messages = messages.Count > 0 ? messages : null,
+                Database = connection.Database
             };
 
             await onBatch(cancelledBatch);
@@ -221,6 +238,142 @@ public class QueryExecutor
         {
             connection.InfoMessage -= infoMessageHandler;
             _cancellationManager.Remove(queryId);
+        }
+    }
+
+    internal static IEnumerable<string> SplitBatches(string sql)
+    {
+        var currentBatch = new StringBuilder();
+        var inString = false;
+        var inBracketedIdentifier = false;
+        var inDoubleQuotedIdentifier = false;
+        var blockCommentDepth = 0;
+
+        for (var lineStart = 0; lineStart < sql.Length;)
+        {
+            var lineEnd = sql.IndexOfAny(NewlineCharacters, lineStart);
+            var line = lineEnd < 0 ? sql[lineStart..] : sql[lineStart..lineEnd];
+            var newline = "";
+            if (lineEnd < 0)
+            {
+                lineStart = sql.Length;
+            }
+            else if (sql[lineEnd] == '\r' && lineEnd + 1 < sql.Length && sql[lineEnd + 1] == '\n')
+            {
+                newline = "\r\n";
+                lineStart = lineEnd + 2;
+            }
+            else
+            {
+                newline = sql[lineEnd] == '\r' ? "\r" : "\n";
+                lineStart = lineEnd + 1;
+            }
+
+            var separator = !inString && !inBracketedIdentifier && !inDoubleQuotedIdentifier && blockCommentDepth == 0
+                ? BatchSeparator.Match(line)
+                : Match.Empty;
+            if (separator.Success)
+            {
+                var count = separator.Groups["count"];
+                var repeatCount = 1;
+                if (count.Success && !int.TryParse(count.Value, out repeatCount))
+                    throw new InvalidOperationException($"GO repeat count '{count.Value}' exceeds the supported maximum of {int.MaxValue}.");
+
+                var batch = currentBatch.ToString();
+                if (!string.IsNullOrWhiteSpace(batch))
+                {
+                    for (var i = 0; i < repeatCount; i++)
+                        yield return batch;
+                }
+                currentBatch.Clear();
+                continue;
+            }
+
+            currentBatch.Append(line).Append(newline);
+            TrackSqlState(line, ref inString, ref inBracketedIdentifier, ref inDoubleQuotedIdentifier, ref blockCommentDepth);
+        }
+
+        var finalBatch = currentBatch.ToString();
+        if (!string.IsNullOrWhiteSpace(finalBatch))
+            yield return finalBatch;
+    }
+
+    private static void TrackSqlState(
+        string line,
+        ref bool inString,
+        ref bool inBracketedIdentifier,
+        ref bool inDoubleQuotedIdentifier,
+        ref int blockCommentDepth)
+    {
+        for (var i = 0; i < line.Length; i++)
+        {
+            if (inString)
+            {
+                if (line[i] != '\'')
+                    continue;
+                if (i + 1 < line.Length && line[i + 1] == '\'')
+                    i++;
+                else
+                    inString = false;
+                continue;
+            }
+
+            if (inBracketedIdentifier)
+            {
+                if (line[i] != ']')
+                    continue;
+                if (i + 1 < line.Length && line[i + 1] == ']')
+                    i++;
+                else
+                    inBracketedIdentifier = false;
+                continue;
+            }
+
+            if (inDoubleQuotedIdentifier)
+            {
+                if (line[i] != '"')
+                    continue;
+                if (i + 1 < line.Length && line[i + 1] == '"')
+                    i++;
+                else
+                    inDoubleQuotedIdentifier = false;
+                continue;
+            }
+
+            if (blockCommentDepth > 0)
+            {
+                if (i + 1 < line.Length && line[i] == '/' && line[i + 1] == '*')
+                {
+                    blockCommentDepth++;
+                    i++;
+                }
+                else if (i + 1 < line.Length && line[i] == '*' && line[i + 1] == '/')
+                {
+                    blockCommentDepth--;
+                    i++;
+                }
+                continue;
+            }
+
+            if (i + 1 < line.Length && line[i] == '-' && line[i + 1] == '-')
+                return;
+            if (i + 1 < line.Length && line[i] == '/' && line[i + 1] == '*')
+            {
+                blockCommentDepth++;
+                i++;
+            }
+            else if (line[i] == '\'')
+            {
+                inString = true;
+            }
+            else if (line[i] == '[')
+            {
+                inBracketedIdentifier = true;
+            }
+            else if (line[i] == '"')
+            {
+                inDoubleQuotedIdentifier = true;
+            }
         }
     }
 

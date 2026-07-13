@@ -49,6 +49,9 @@ public record QueryExecuteResult
 
     [JsonPropertyName("resultSetIndex")]
     public int? ResultSetIndex { get; init; }
+
+    [JsonPropertyName("database")]
+    public string? Database { get; init; }
 }
 
 public record QueryCancelResult

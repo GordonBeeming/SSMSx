@@ -23,6 +23,8 @@ interface TabExecutionInfo {
   queryId: string | null;
   requestId: string | null;
   startTime: number | null;
+  databaseContext?: string;
+  databaseSyncEnabled?: boolean;
 }
 
 interface SavedQuerySession {
@@ -235,11 +237,21 @@ export const useQueryStore = create<QueryState>((set, get) => ({
   setActiveTab: (id) => set({ activeTabId: id }),
 
   updateTab: (tabId, patch) =>
-    set((state) => ({
-      tabs: state.tabs.map((tab) =>
-        tab.id === tabId ? { ...tab, ...patch } : tab
-      ),
-    })),
+    set((state) => {
+      const execution = state.executionInfo[tabId];
+      return {
+        tabs: state.tabs.map((tab) =>
+          tab.id === tabId ? { ...tab, ...patch } : tab
+        ),
+        executionInfo:
+          patch.database !== undefined && execution?.state === "executing"
+            ? {
+                ...state.executionInfo,
+                [tabId]: { ...execution, databaseSyncEnabled: false },
+              }
+            : state.executionInfo,
+      };
+    }),
 
   updateSql: (tabId, sql) =>
     set((state) => ({
@@ -469,6 +481,8 @@ export const useQueryStore = create<QueryState>((set, get) => ({
           queryId: requestId,
           requestId,
           startTime: Date.now(),
+          databaseContext: tab.database,
+          databaseSyncEnabled: true,
         },
       },
       results: {
@@ -524,9 +538,21 @@ export const useQueryStore = create<QueryState>((set, get) => ({
   handleResultsBatch: (payload) => {
     const tabId = findTabByIds(get().executionInfo, payload.queryId, payload.requestId);
     if (!tabId) return;
+    const database = payload.database;
 
     set((s) => {
       const existing = s.results[tabId] ?? emptyResult();
+      const execution = s.executionInfo[tabId];
+      const currentTab = s.tabs.find((tab) => tab.id === tabId);
+      const databaseSyncEnabled =
+        execution?.databaseSyncEnabled !== false &&
+        currentTab?.database === execution?.databaseContext;
+      const tabs =
+        database &&
+        databaseSyncEnabled &&
+        currentTab?.database !== database
+          ? s.tabs.map((tab) => (tab.id === tabId ? { ...tab, database } : tab))
+          : s.tabs;
       const hasResultData =
         (payload.columns && payload.columns.length > 0) ||
         (payload.rows && payload.rows.length > 0);
@@ -545,11 +571,14 @@ export const useQueryStore = create<QueryState>((set, get) => ({
       ];
 
       return {
+        tabs,
         executionInfo: {
           ...s.executionInfo,
           [tabId]: {
             ...s.executionInfo[tabId],
             queryId: payload.queryId,
+            databaseContext: database ?? execution?.databaseContext,
+            databaseSyncEnabled,
           },
         },
         results: {
@@ -570,9 +599,21 @@ export const useQueryStore = create<QueryState>((set, get) => ({
   handleQueryComplete: (payload) => {
     const tabId = findTabByIds(get().executionInfo, payload.queryId, payload.requestId);
     if (!tabId) return;
+    const database = payload.database;
 
     set((s) => {
       const existing = s.results[tabId] ?? emptyResult();
+      const execution = s.executionInfo[tabId];
+      const currentTab = s.tabs.find((tab) => tab.id === tabId);
+      const databaseSyncEnabled =
+        execution?.databaseSyncEnabled !== false &&
+        currentTab?.database === execution?.databaseContext;
+      const tabs =
+        database &&
+        databaseSyncEnabled &&
+        currentTab?.database !== database
+          ? s.tabs.map((tab) => (tab.id === tabId ? { ...tab, database } : tab))
+          : s.tabs;
       const hasResultData =
         (payload.columns && payload.columns.length > 0) ||
         (payload.rows && payload.rows.length > 0);
@@ -597,12 +638,15 @@ export const useQueryStore = create<QueryState>((set, get) => ({
       );
 
       return {
+        tabs,
         executionInfo: {
           ...s.executionInfo,
           [tabId]: {
             ...s.executionInfo[tabId],
             state: isCancelled ? "cancelled" : "completed",
             startTime: null,
+            databaseContext: database ?? execution?.databaseContext,
+            databaseSyncEnabled,
           },
         },
         results: {
