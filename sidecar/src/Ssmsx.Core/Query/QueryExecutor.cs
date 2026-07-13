@@ -16,7 +16,7 @@ namespace Ssmsx.Core.Query;
 public class QueryExecutor
 {
     private static readonly Regex BatchSeparator = new(
-        @"^[\t ]*GO(?:[\t ]+(?<count>[1-9][0-9]*))?[\t ]*(?:--[^\r\n]*)?\r?$",
+        @"^[\t ]*GO(?:[\t ]+(?<count>[1-9][0-9]*))?[\t ]*(?:/\*(?:[^*]|\*(?!/))*\*/[\t ]*)*(?:--[^\r\n]*)?\r?$",
         RegexOptions.IgnoreCase | RegexOptions.Multiline | RegexOptions.CultureInvariant);
 
     private readonly ConnectionManager _connectionManager;
