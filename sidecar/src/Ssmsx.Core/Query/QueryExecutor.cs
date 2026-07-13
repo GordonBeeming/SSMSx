@@ -15,6 +15,8 @@ namespace Ssmsx.Core.Query;
 /// </summary>
 public class QueryExecutor
 {
+    private static readonly char[] NewlineCharacters = ['\r', '\n'];
+
     private static readonly Regex BatchSeparator = new(
         @"^[\t ]*GO(?:[\t ]+(?<count>[1-9][0-9]*))?[\t ]*(?:/\*(?:[^*]|\*(?!/))*\*/[\t ]*)*(?:--[^\r\n]*)?\r?$",
         RegexOptions.IgnoreCase | RegexOptions.Multiline | RegexOptions.CultureInvariant);
@@ -249,7 +251,7 @@ public class QueryExecutor
 
         for (var lineStart = 0; lineStart < sql.Length;)
         {
-            var lineEnd = sql.IndexOfAny(['\r', '\n'], lineStart);
+            var lineEnd = sql.IndexOfAny(NewlineCharacters, lineStart);
             var line = lineEnd < 0 ? sql[lineStart..] : sql[lineStart..lineEnd];
             var newline = "";
             if (lineEnd < 0)
