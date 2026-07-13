@@ -265,7 +265,7 @@ public class QueryExecutor
             }
             else
             {
-                newline = sql[lineEnd].ToString();
+                newline = sql[lineEnd] == '\r' ? "\r" : "\n";
                 lineStart = lineEnd + 1;
             }
 
