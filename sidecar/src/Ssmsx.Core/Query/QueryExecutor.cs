@@ -94,17 +94,17 @@ public class QueryExecutor
             connection.ChangeDatabase(database);
             stopwatch.Start();
             int resultSetIndex = 0;
+            await using var cmd = new SqlCommand
+            {
+                Connection = connection,
+                CommandTimeout = DefaultCommandTimeoutSeconds
+            };
+            _cancellationManager.SetCommand(queryId, cmd);
 
             foreach (var batchSql in SplitBatches(sql))
             {
                 ct.ThrowIfCancellationRequested();
-
-                await using var cmd = new SqlCommand(batchSql, connection)
-                {
-                    CommandTimeout = DefaultCommandTimeoutSeconds
-                };
-
-                _cancellationManager.SetCommand(queryId, cmd);
+                cmd.CommandText = batchSql;
 
                 await using var reader = await cmd.ExecuteReaderAsync(ct);
 
