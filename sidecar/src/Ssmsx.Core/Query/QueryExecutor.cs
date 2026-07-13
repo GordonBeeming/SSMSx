@@ -96,6 +96,8 @@ public class QueryExecutor
 
             foreach (var batchSql in SplitBatches(sql))
             {
+                ct.ThrowIfCancellationRequested();
+
                 await using var cmd = new SqlCommand(batchSql, connection)
                 {
                     CommandTimeout = DefaultCommandTimeoutSeconds
@@ -129,7 +131,8 @@ public class QueryExecutor
                                 Rows = rowBuffer,
                                 Batch = batchNumber,
                                 Done = false,
-                                ResultSetIndex = resultSetIndex
+                                ResultSetIndex = resultSetIndex,
+                                Database = connection.Database
                             };
 
                             await onBatch(batch);
@@ -149,7 +152,8 @@ public class QueryExecutor
                             Rows = rowBuffer.Count > 0 ? rowBuffer : null,
                             Batch = batchNumber,
                             Done = false,
-                            ResultSetIndex = resultSetIndex
+                            ResultSetIndex = resultSetIndex,
+                            Database = connection.Database
                         };
 
                         await onBatch(batch);
@@ -233,6 +237,7 @@ public class QueryExecutor
         }
     }
 
+    // ponytail: Line-based parsing covers normal scripts; use a T-SQL lexer if multiline literals need GO-only lines.
     internal static IEnumerable<string> SplitBatches(string sql) =>
         BatchSeparator.Split(sql).Where(batch => !string.IsNullOrWhiteSpace(batch));
 

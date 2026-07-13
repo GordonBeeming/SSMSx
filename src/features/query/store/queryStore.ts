@@ -524,6 +524,7 @@ export const useQueryStore = create<QueryState>((set, get) => ({
   handleResultsBatch: (payload) => {
     const tabId = findTabByIds(get().executionInfo, payload.queryId, payload.requestId);
     if (!tabId) return;
+    const database = payload.database;
 
     set((s) => {
       const existing = s.results[tabId] ?? emptyResult();
@@ -545,6 +546,10 @@ export const useQueryStore = create<QueryState>((set, get) => ({
       ];
 
       return {
+        tabs:
+          database && s.tabs.some((tab) => tab.id === tabId && tab.database !== database)
+            ? s.tabs.map((tab) => (tab.id === tabId ? { ...tab, database } : tab))
+            : s.tabs,
         executionInfo: {
           ...s.executionInfo,
           [tabId]: {
@@ -598,9 +603,10 @@ export const useQueryStore = create<QueryState>((set, get) => ({
       );
 
       return {
-        tabs: database
-          ? s.tabs.map((tab) => (tab.id === tabId ? { ...tab, database } : tab))
-          : s.tabs,
+        tabs:
+          database && s.tabs.some((tab) => tab.id === tabId && tab.database !== database)
+            ? s.tabs.map((tab) => (tab.id === tabId ? { ...tab, database } : tab))
+            : s.tabs,
         executionInfo: {
           ...s.executionInfo,
           [tabId]: {
