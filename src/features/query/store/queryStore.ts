@@ -237,11 +237,21 @@ export const useQueryStore = create<QueryState>((set, get) => ({
   setActiveTab: (id) => set({ activeTabId: id }),
 
   updateTab: (tabId, patch) =>
-    set((state) => ({
-      tabs: state.tabs.map((tab) =>
-        tab.id === tabId ? { ...tab, ...patch } : tab
-      ),
-    })),
+    set((state) => {
+      const execution = state.executionInfo[tabId];
+      return {
+        tabs: state.tabs.map((tab) =>
+          tab.id === tabId ? { ...tab, ...patch } : tab
+        ),
+        executionInfo:
+          patch.database !== undefined && execution?.state === "executing"
+            ? {
+                ...state.executionInfo,
+                [tabId]: { ...execution, databaseSyncEnabled: false },
+              }
+            : state.executionInfo,
+      };
+    }),
 
   updateSql: (tabId, sql) =>
     set((state) => ({
