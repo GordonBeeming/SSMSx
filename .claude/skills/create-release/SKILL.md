@@ -111,9 +111,10 @@ Create a stable or beta GitHub release for `SSMSx` with the versioning and relea
    - Build the .NET sidecar for macOS arm64
    - Build the Tauri app bundle
    - Sign with Developer ID
-   - Notarize with Apple
-   - Staple the notarization ticket
-   - Create `ssmsx-{version}-aarch64.dmg`
+   - Notarize and staple the app bundle
+   - Create and sign `ssmsx-{tag without v}-aarch64.dmg`
+   - Notarize the DMG with Apple
+   - Staple and validate the notarization ticket
    - Upload the DMG to the release
    - Update `GordonBeeming/homebrew-tap` at `Casks/ssmsx.rb`
 
