@@ -200,6 +200,8 @@ jobs:
     environment: prod
     permissions:
       contents: write
+    env:
+      APPLE_SIGNING_IDENTITY: "Developer ID Application: Gordon Beeming (89DBN36T4T)"
 
     steps:
       - name: Checkout repository
@@ -316,8 +318,6 @@ jobs:
           rm certificate.p12
 
       - name: Build signed app bundle
-        env:
-          APPLE_SIGNING_IDENTITY: "Developer ID Application: Gordon Beeming (89DBN36T4T)"
         run: npm run tauri -- build --bundles app
 
       - name: Verify release app metadata
@@ -339,7 +339,7 @@ jobs:
           codesign --deep --force \
             --options runtime \
             --timestamp \
-            --sign "Developer ID Application: Gordon Beeming (89DBN36T4T)" \
+            --sign "${APPLE_SIGNING_IDENTITY}" \
             "${APP_BUNDLE}"
           codesign --verify --deep --strict --verbose=2 "${APP_BUNDLE}"
 
@@ -386,7 +386,7 @@ jobs:
             "${DMG}"
           codesign --force \
             --timestamp \
-            --sign "Developer ID Application: Gordon Beeming (89DBN36T4T)" \
+            --sign "${APPLE_SIGNING_IDENTITY}" \
             "${DMG}"
           codesign --verify --verbose=2 "${DMG}"
           xcrun notarytool submit "${DMG}" \
