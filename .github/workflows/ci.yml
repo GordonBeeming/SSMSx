@@ -343,6 +343,28 @@ jobs:
             "${APP_BUNDLE}"
           codesign --verify --deep --strict --verbose=2 "${APP_BUNDLE}"
 
+      - name: Notarize application
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+        run: |
+          test -n "${APPLE_ID}" || { echo "APPLE_ID is not set in the prod environment." >&2; exit 1; }
+          test -n "${APPLE_TEAM_ID}" || { echo "APPLE_TEAM_ID is not set in the prod environment." >&2; exit 1; }
+          test -n "${APPLE_APP_PASSWORD}" || { echo "APPLE_APP_PASSWORD is not set in the prod environment." >&2; exit 1; }
+
+          APP_BUNDLE="src-tauri/target/release/bundle/macos/SSMSx.app"
+          NOTARY_ZIP="${RUNNER_TEMP}/ssmsx-notarize.zip"
+          ditto -c -k --keepParent "${APP_BUNDLE}" "${NOTARY_ZIP}"
+          xcrun notarytool submit "${NOTARY_ZIP}" \
+            --apple-id "${APPLE_ID}" \
+            --team-id "${APPLE_TEAM_ID}" \
+            --password "${APPLE_APP_PASSWORD}" \
+            --wait
+
+      - name: Staple application notarization ticket
+        run: xcrun stapler staple src-tauri/target/release/bundle/macos/SSMSx.app
+
       - name: Create, sign, notarize, and validate DMG
         env:
           APPLE_ID: ${{ secrets.APPLE_ID }}
