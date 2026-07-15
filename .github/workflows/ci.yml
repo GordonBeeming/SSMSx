@@ -343,7 +343,7 @@ jobs:
             "${APP_BUNDLE}"
           codesign --verify --deep --strict --verbose=2 "${APP_BUNDLE}"
 
-      - name: Notarize application
+      - name: Create, sign, notarize, and validate DMG
         env:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
@@ -353,28 +353,29 @@ jobs:
           test -n "${APPLE_TEAM_ID}" || { echo "APPLE_TEAM_ID is not set in the prod environment." >&2; exit 1; }
           test -n "${APPLE_APP_PASSWORD}" || { echo "APPLE_APP_PASSWORD is not set in the prod environment." >&2; exit 1; }
 
-          APP_BUNDLE="src-tauri/target/release/bundle/macos/SSMSx.app"
-          NOTARY_ZIP="${RUNNER_TEMP}/ssmsx-notarize.zip"
-          ditto -c -k --keepParent "${APP_BUNDLE}" "${NOTARY_ZIP}"
-          xcrun notarytool submit "${NOTARY_ZIP}" \
-            --apple-id "${APPLE_ID}" \
-            --team-id "${APPLE_TEAM_ID}" \
-            --password "${APPLE_APP_PASSWORD}" \
-            --wait
-
-      - name: Staple notarization ticket
-        run: xcrun stapler staple src-tauri/target/release/bundle/macos/SSMSx.app
-
-      - name: Create DMG
-        run: |
           VERSION="${GITHUB_REF_NAME#v}"
+          DMG="dist/release/ssmsx-${VERSION}-aarch64.dmg"
           mkdir -p dist/release
           hdiutil create \
             -volname "SSMSx" \
             -srcfolder src-tauri/target/release/bundle/macos/SSMSx.app \
             -ov \
             -format UDZO \
-            "dist/release/ssmsx-${VERSION}-aarch64.dmg"
+            "${DMG}"
+          codesign --force \
+            --timestamp \
+            --sign "Developer ID Application: Gordon Beeming (89DBN36T4T)" \
+            "${DMG}"
+          codesign --verify --verbose=2 "${DMG}"
+          xcrun notarytool submit "${DMG}" \
+            --apple-id "${APPLE_ID}" \
+            --team-id "${APPLE_TEAM_ID}" \
+            --password "${APPLE_APP_PASSWORD}" \
+            --wait
+          xcrun stapler staple "${DMG}"
+          xcrun stapler validate "${DMG}"
+          hdiutil verify "${DMG}"
+          spctl -a -t open --context context:primary-signature -vv "${DMG}"
 
       - name: Upload release asset
         env:
