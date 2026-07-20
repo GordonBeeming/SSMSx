@@ -58,53 +58,57 @@ Create a stable or beta GitHub release for `SSMSx` with the versioning and relea
    ```
 
 6. Create the release on `main`.
-   Use a published release, not a draft, when the user wants the pipeline to start now:
-   ```bash
-   gh release create v{major}.{minor} \
-     --repo GordonBeeming/ssmsx \
-     --target main \
-     --title "v{major}.{minor} - {short description}" \
-     --notes "$(cat <<'EOF'
-   # SSMSx v{major}.{minor} - {short description}
 
-   ## What's new
+Use a published release, not a draft, when the user wants the pipeline to start now:
 
-   - {list changes since the last release using git log}
+````bash
+gh release create v{major}.{minor} \
+  --repo GordonBeeming/ssmsx \
+  --target main \
+  --title "v{major}.{minor} - {short description}" \
+  --notes "$(cat <<'EOF'
+# SSMSx v{major}.{minor} - {short description}
 
-   ## Install
+## What's new
 
-   ```bash
-   brew upgrade --cask gordonbeeming/tap/ssmsx
-   ```
+- {list changes since the last release using git log}
 
-   Or download the DMG from the assets below after the release workflow completes.
-   EOF
-   )"
-   ```
-   For beta releases, use the beta tag and mark the GitHub release as a prerelease:
-   ```bash
-   gh release create v{major}.{minor}-beta.{n} \
-     --repo GordonBeeming/ssmsx \
-     --target main \
-     --prerelease \
-     --title "v{major}.{minor}-beta.{n} - {short description}" \
-     --notes "$(cat <<'EOF'
-   # SSMSx v{major}.{minor}-beta.{n} - {short description}
+## Install
 
-   ## What's new
+```bash
+brew upgrade --cask gordonbeeming/tap/ssmsx
+```
 
-   - {list changes since the last release using git log}
+Or download the DMG from the assets below after the release workflow completes.
+EOF
+)"
+````
 
-   ## Install
+For beta releases, use the beta tag and mark the GitHub release as a prerelease:
 
-   ```bash
-   brew upgrade --cask gordonbeeming/tap/ssmsx
-   ```
+````bash
+gh release create v{major}.{minor}-beta.{n} \
+  --repo GordonBeeming/ssmsx \
+  --target main \
+  --prerelease \
+  --title "v{major}.{minor}-beta.{n} - {short description}" \
+  --notes "$(cat <<'EOF'
+# SSMSx v{major}.{minor}-beta.{n} - {short description}
 
-   Or download the DMG from the assets below after the release workflow completes.
-   EOF
-   )"
-   ```
+## What's new
+
+- {list changes since the last release using git log}
+
+## Install
+
+```bash
+brew upgrade --cask gordonbeeming/tap/ssmsx
+```
+
+Or download the DMG from the assets below after the release workflow completes.
+EOF
+)"
+````
 
 7. The release pipeline will automatically:
    - Run the verification suite
