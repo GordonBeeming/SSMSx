@@ -6,7 +6,6 @@ import { ContextMenu, type ContextMenuItem } from "../../../shared/components/Co
 import { ConfirmDialog } from "../../../shared/components/ConfirmDialog";
 import { getEffectiveAlias, resolveColorProfile } from "../../../shared/connectionAppearance";
 import { useSettingsStore } from "../../settings";
-import { ColorProfileMarker } from "../../../shared/components/ColorProfileMarker";
 
 const AUTH_TYPE_LABELS: Record<string, string> = {
   SqlAuth: "SQL",
@@ -204,30 +203,17 @@ export function ConnectionList() {
                 <button
                   type="button"
                   aria-pressed={isSelected}
-                  className="grid min-w-0 grid-cols-[12px_minmax(0,1fr)] items-center gap-2 rounded text-left focus:outline-none focus:ring-1 focus:ring-accent-hover"
+                  className="block min-w-0 rounded text-left focus:outline-none focus:ring-1 focus:ring-accent-hover"
                   onClick={() => handleClick(c)}
                   onDoubleClick={() => handleDoubleClick(c)}
                 >
-                  <ColorProfileMarker profile={profile} size="md" />
-                  <span className="min-w-0">
-                    <span
-                      className="block break-words text-sm font-medium leading-4 text-text-primary [overflow-wrap:anywhere]"
-                      style={
-                        isSelected ? { color: profile.foreground } : undefined
-                      }
-                    >
-                      {getEffectiveAlias(c)}
-                    </span>
-                    <span
-                      className="mt-0.5 block break-words text-xs leading-4 text-text-secondary [overflow-wrap:anywhere]"
-                      style={
-                        isSelected ? { color: profile.foreground } : undefined
-                      }
-                    >
-                      {c.serverName}
-                      {c.database ? ` / ${c.database}` : ""}
-                      {c.username ? ` — ${c.username}` : ""}
-                    </span>
+                  <span
+                    className="block break-words text-sm font-medium leading-4 text-text-primary [overflow-wrap:anywhere]"
+                    style={
+                      isSelected ? { color: profile.foreground } : undefined
+                    }
+                  >
+                    {getEffectiveAlias(c)}
                   </span>
                 </button>
                 <div className="flex shrink-0 items-start gap-1">

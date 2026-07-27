@@ -10,6 +10,7 @@ import { useConnectionStore } from "../../src/features/connection/store/connecti
 import { ColorProfileCombobox } from "../../src/shared/components/ColorProfileCombobox";
 import { ConfirmDialog } from "../../src/shared/components/ConfirmDialog";
 import { ConnectionStringTab } from "../../src/features/connection/components/ConnectionStringTab";
+import { ConnectionList } from "../../src/features/connection/components/ConnectionList";
 import { PropertiesTab } from "../../src/features/connection/components/PropertiesTab";
 import type { ConnectionInfo } from "../../src/features/connection/types";
 import type { CustomColorProfile } from "../../src/features/settings/types";
@@ -132,6 +133,40 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
+});
+
+describe("ConnectionList", () => {
+  it("shows only the alias when present, falls back to the server name, and omits profile icons", () => {
+    const unnamedConnection: ConnectionInfo = {
+      ...linkedConnection,
+      id: "dev",
+      name: "",
+      serverName: "sql-dev",
+      database: "master",
+      username: "developer",
+    };
+    resetStores([customProfile]);
+    useConnectionStore.setState({
+      connections: [linkedConnection, unnamedConnection],
+      selectedConnection: linkedConnection,
+    });
+
+    const view = render(<ConnectionList />);
+    const aliasedConnection = screen.getByRole("button", {
+      name: "Production",
+    });
+
+    expect(aliasedConnection.textContent).toBe("Production");
+    expect(screen.queryByText("sql-prod")).toBeNull();
+    expect(screen.queryByText("master")).toBeNull();
+    expect(screen.queryByText("developer")).toBeNull();
+    expect(screen.getByRole("button", { name: "sql-dev" })).toBeTruthy();
+    expect(view.container.querySelectorAll("[data-profile-marker]")).toHaveLength(0);
+    expect(aliasedConnection.parentElement?.style.backgroundColor).toBe(
+      "rgb(0, 0, 0)"
+    );
+    expect(aliasedConnection.parentElement?.style.color).toBe("rgb(255, 255, 255)");
+  });
 });
 
 describe("ColorProfileCombobox", () => {
