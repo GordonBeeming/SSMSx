@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "test:frontend": "node --experimental-strip-types --test tests/frontend/*.test.ts && vitest run tests/frontend/*.test.tsx",
+    "test:frontend": "node --experimental-strip-types --test tests/frontend/*.test.ts && vitest run --dir tests/frontend --exclude \"**/*.test.ts\"",
     "preview": "vite preview",
     "tauri": "tauri",
     "tauri:dev": "tauri dev --config src-tauri/tauri.conf.dev.json --features dev-mcp",
