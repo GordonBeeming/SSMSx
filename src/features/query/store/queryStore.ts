@@ -15,6 +15,7 @@ import {
   type IntelliSenseMetadata,
 } from "../api/queryApi";
 import { useConnectionStore } from "../../connection/store/connectionStore";
+import { normalizeRestoredQueryTab } from "../utils/queryTabs";
 
 const QUERY_SESSION_STORAGE_KEY = "ssmsx.querySession.v1";
 
@@ -49,6 +50,7 @@ interface QueryState {
   setActiveTab: (id: string) => void;
   updateSql: (tabId: string, sql: string) => void;
   reorderTabs: (fromIndex: number, toIndex: number) => void;
+  setTabPinned: (tabId: string, pinned: boolean) => void;
   closeOtherTabs: (tabId: string) => void;
   closeAllTabs: () => void;
   updateTab: (tabId: string, patch: Partial<QueryTab>) => void;
@@ -150,7 +152,10 @@ function readSavedSession(): SavedQuerySession | null {
 
     return {
       version: 1,
-      tabs: parsed.tabs.filter(isRestorableTab),
+      tabs: parsed.tabs.flatMap((tab) => {
+        const normalized = normalizeRestoredQueryTab(tab);
+        return normalized ? [normalized] : [];
+      }),
       tabSql: sanitizeTabSql(parsed.tabSql),
       activeTabId: typeof parsed.activeTabId === "string" ? parsed.activeTabId : null,
       savedAt: typeof parsed.savedAt === "string" ? parsed.savedAt : "",
@@ -159,21 +164,6 @@ function readSavedSession(): SavedQuerySession | null {
     console.warn("Failed to read saved query session:", e);
     return null;
   }
-}
-
-function isRestorableTab(tab: unknown): tab is QueryTab {
-  if (typeof tab !== "object" || tab == null) return false;
-  const candidate = tab as Partial<QueryTab>;
-  return (
-    typeof candidate.id === "string" &&
-    (typeof candidate.connectionId === "string" ||
-      candidate.connectionId == null) &&
-    typeof candidate.database === "string" &&
-    typeof candidate.title === "string" &&
-    (candidate.kind == null ||
-      candidate.kind === "query" ||
-      candidate.kind === "diagram")
-  );
 }
 
 function sanitizeTabSql(tabSql: object): Record<string, string> {
@@ -265,6 +255,13 @@ export const useQueryStore = create<QueryState>((set, get) => ({
       tabs.splice(toIndex, 0, moved);
       return { tabs };
     }),
+
+  setTabPinned: (tabId, pinned) =>
+    set((state) => ({
+      tabs: state.tabs.map((tab) =>
+        tab.id === tabId ? { ...tab, pinned } : tab
+      ),
+    })),
 
   closeOtherTabs: (tabId) =>
     set((state) => {

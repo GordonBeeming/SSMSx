@@ -12,6 +12,8 @@ import { QueryStatusBar } from "./QueryStatusBar";
 import { QueryResultsTable } from "./QueryResultsTable";
 import { QueryTargetBar } from "./QueryTargetBar";
 import { useConnectionStore } from "../../connection";
+import { useSettingsStore } from "../../settings";
+import { resolveColorProfile } from "../../../shared/connectionAppearance";
 import type { IntelliSenseMetadata } from "../api/queryApi";
 
 const DEFAULT_RESULTS_HEIGHT_PERCENT = 50;
@@ -29,10 +31,15 @@ export function QueryPanel() {
   const { activeTabId, tabs, tabSql, updateSql, executeQuery, cancelQuery, results, loadIntelliSense } =
     useQueryStore();
   const activeConnectionIds = useConnectionStore((s) => s.activeConnectionIds);
+  const connections = useConnectionStore((s) => s.connections);
+  const customProfiles = useSettingsStore((s) => s.settings.connections.colorProfiles);
 
   const activeTab = tabs.find((t) => t.id === activeTabId);
   const activeSql = activeTabId ? tabSql[activeTabId] ?? "" : "";
   const activeResult = activeTabId ? results[activeTabId] : undefined;
+  const activeConnection = activeTab?.connectionId
+    ? connections.find((connection) => connection.id === activeTab.connectionId)
+    : undefined;
   const splitContainerRef = useRef<HTMLDivElement>(null);
   const [resultsHeightPercent, setResultsHeightPercent] = useState(
     DEFAULT_RESULTS_HEIGHT_PERCENT
@@ -195,7 +202,17 @@ export function QueryPanel() {
               className="flex min-h-[120px] flex-col overflow-hidden"
               style={{ flex: `0 0 ${resultsHeightPercent}%` }}
             >
-              <QueryResultsTable result={activeResult} />
+              <QueryResultsTable
+                result={activeResult}
+                tabId={activeTabId}
+                profile={activeConnection
+                  ? resolveColorProfile(
+                      activeConnection.colorProfileId,
+                      customProfiles,
+                      activeConnection.color
+                    )
+                  : null}
+              />
             </div>
           </>
         )}

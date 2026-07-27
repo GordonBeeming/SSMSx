@@ -11,13 +11,22 @@ import {
 } from "../api/connectionApi";
 import { useExplorerStore } from "../../explorer";
 import { CONNECTION_CANCELLED_MESSAGE } from "../utils/connectionResult";
+import { RED_COLOR_PROFILE_ID, profileIdForConnection } from "../../../shared/connectionAppearance";
 
-export type DialogTab = "properties" | "connectionString" | "custom";
+export type DialogTab = "properties" | "connectionString";
 export type ConnectionOperation = "test" | "connect" | null;
 export type ConnectionOperationTarget = Pick<
   ConnectionInfo,
   "id" | "name" | "serverName" | "database" | "authType" | "username"
 >;
+export interface ConnectionAppearanceDraft {
+  name: string;
+  colorProfileId: string;
+}
+
+export type LoadConnectionsResult =
+  | { ok: true; connections: ConnectionInfo[] }
+  | { ok: false; error: string };
 
 interface ConnectionState {
   connections: ConnectionInfo[];
@@ -34,9 +43,11 @@ interface ConnectionState {
   searchFilter: string;
   selectionVersion: number;
   formDirty: boolean;
+  appearanceDraft: ConnectionAppearanceDraft;
 
-  loadConnections: () => Promise<void>;
+  loadConnections: () => Promise<LoadConnectionsResult>;
   setFormDirty: (dirty: boolean) => void;
+  setAppearanceDraft: (draft: Partial<ConnectionAppearanceDraft>) => void;
   selectConnection: (c: ConnectionInfo | null) => void;
   openDialog: (options?: { refreshConnections?: boolean }) => void;
   closeDialog: () => void;
@@ -69,15 +80,67 @@ export const useConnectionStore = create<ConnectionState>((set, get) => ({
   searchFilter: "",
   selectionVersion: 0,
   formDirty: false,
+  appearanceDraft: { name: "", colorProfileId: RED_COLOR_PROFILE_ID },
 
   setFormDirty: (dirty) => set({ formDirty: dirty }),
+  setAppearanceDraft: (draft) => set((state) => ({ appearanceDraft: { ...state.appearanceDraft, ...draft }, formDirty: true })),
 
   loadConnections: async () => {
     try {
       const connections = await connectionList();
-      set({ connections, error: null });
+      set((state) => {
+        const previousSelected = state.selectedConnection;
+        if (!previousSelected) {
+          return { connections, error: null };
+        }
+
+        const refreshedSelected = connections.find(
+          (connection) => connection.id === previousSelected.id
+        );
+        if (!refreshedSelected) {
+          return {
+            connections,
+            selectedConnection: null,
+            appearanceDraft: {
+              name: "",
+              colorProfileId: RED_COLOR_PROFILE_ID,
+            },
+            formDirty: false,
+            selectionVersion: state.selectionVersion + 1,
+            error: null,
+          };
+        }
+
+        const previousAppearance = appearanceForConnection(previousSelected);
+        const refreshedAppearance = appearanceForConnection(refreshedSelected);
+        const appearanceDraft = state.formDirty
+          ? {
+              name:
+                state.appearanceDraft.name === previousAppearance.name
+                  ? refreshedAppearance.name
+                  : state.appearanceDraft.name,
+              colorProfileId:
+                state.appearanceDraft.colorProfileId ===
+                previousAppearance.colorProfileId
+                  ? refreshedAppearance.colorProfileId
+                  : state.appearanceDraft.colorProfileId,
+            }
+          : refreshedAppearance;
+
+        return {
+          connections,
+          selectedConnection: refreshedSelected,
+          appearanceDraft,
+          selectionVersion:
+            state.selectionVersion + (state.formDirty ? 0 : 1),
+          error: null,
+        };
+      });
+      return { ok: true, connections };
     } catch (e) {
-      set({ error: String(e) });
+      const error = String(e);
+      set({ error });
+      return { ok: false, error };
     }
   },
 
@@ -87,6 +150,9 @@ export const useConnectionStore = create<ConnectionState>((set, get) => ({
       testResult: null,
       selectionVersion: state.selectionVersion + 1,
       formDirty: false,
+      appearanceDraft: c
+        ? { name: c.name ?? "", colorProfileId: profileIdForConnection(c) }
+        : { name: "", colorProfileId: RED_COLOR_PROFILE_ID },
     })),
 
   openDialog: (options) => {
@@ -124,6 +190,8 @@ export const useConnectionStore = create<ConnectionState>((set, get) => ({
       activeRequestId: null,
       activeOperationTarget: null,
       loading: false,
+      appearanceDraft: { name: "", colorProfileId: RED_COLOR_PROFILE_ID },
+      formDirty: false,
     });
   },
 
@@ -135,6 +203,7 @@ export const useConnectionStore = create<ConnectionState>((set, get) => ({
     try {
       const saved = await connectionSave(info, password, clearCredential);
       await get().loadConnections();
+      set({ formDirty: false });
       return saved;
     } catch (e) {
       set({ error: String(e) });
@@ -149,7 +218,17 @@ export const useConnectionStore = create<ConnectionState>((set, get) => ({
     try {
       await connectionDelete(id);
       const selected = get().selectedConnection;
-      if (selected?.id === id) set({ selectedConnection: null });
+      if (selected?.id === id) {
+        set((state) => ({
+          selectedConnection: null,
+          appearanceDraft: {
+            name: "",
+            colorProfileId: RED_COLOR_PROFILE_ID,
+          },
+          formDirty: false,
+          selectionVersion: state.selectionVersion + 1,
+        }));
+      }
       await get().loadConnections();
     } catch (e) {
       set({ error: String(e) });
@@ -289,5 +368,14 @@ function toOperationTarget(
     database: connection.database,
     authType: connection.authType,
     username: connection.username,
+  };
+}
+
+function appearanceForConnection(
+  connection: ConnectionInfo
+): ConnectionAppearanceDraft {
+  return {
+    name: connection.name ?? "",
+    colorProfileId: profileIdForConnection(connection),
   };
 }

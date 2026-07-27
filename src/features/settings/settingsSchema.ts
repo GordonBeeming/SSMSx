@@ -7,6 +7,9 @@ export const defaultSettings: AppSettings = {
   workspace: {
     persistQueryTabs: true,
   },
+  connections: {
+    colorProfiles: [],
+  },
 };
 
 export const settingsSchema: SettingDefinition[] = [

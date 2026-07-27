@@ -4,6 +4,9 @@ import type { ConnectionInfo } from "../types";
 import { useConnectionStore } from "../store/connectionStore";
 import { ContextMenu, type ContextMenuItem } from "../../../shared/components/ContextMenu";
 import { ConfirmDialog } from "../../../shared/components/ConfirmDialog";
+import { getEffectiveAlias, resolveColorProfile } from "../../../shared/connectionAppearance";
+import { useSettingsStore } from "../../settings";
+import { ColorProfileMarker } from "../../../shared/components/ColorProfileMarker";
 
 const AUTH_TYPE_LABELS: Record<string, string> = {
   SqlAuth: "SQL",
@@ -23,6 +26,7 @@ export function ConnectionList() {
     setDialogTab,
     formDirty,
   } = useConnectionStore();
+  const customProfiles = useSettingsStore((state) => state.settings.connections.colorProfiles);
 
   const [contextMenu, setContextMenu] = useState<{
     x: number;
@@ -42,7 +46,7 @@ export function ConnectionList() {
     if (!searchFilter) return true;
     const q = searchFilter.toLowerCase();
     return (
-      c.name?.toLowerCase().includes(q) ||
+      getEffectiveAlias(c).toLowerCase().includes(q) ||
       c.serverName.toLowerCase().includes(q) ||
       c.database?.toLowerCase().includes(q)
     );
@@ -114,7 +118,7 @@ export function ConnectionList() {
     (c: ConnectionInfo) => {
       setConfirmAction({
         title: "Delete Connection",
-        message: `Delete connection "${c.name || c.serverName}"? This cannot be undone.`,
+        message: `Delete connection "${getEffectiveAlias(c)}"? This cannot be undone.`,
         confirmLabel: "Delete",
         danger: true,
         onConfirm: () => {
@@ -153,6 +157,7 @@ export function ConnectionList() {
     <div className="flex flex-col gap-2">
       <input
         type="text"
+        aria-label="Search connections"
         placeholder="Search connections..."
         value={searchFilter}
         onChange={(e) => setSearchFilter(e.target.value)}
@@ -175,51 +180,93 @@ export function ConnectionList() {
               : "No connections match your search"}
           </p>
         ) : (
-          filtered.map((c) => (
-            <div
-              key={c.id}
-              className={`group grid cursor-pointer grid-cols-[12px_minmax(0,1fr)_auto] items-start gap-2 rounded px-3 py-2 hover:bg-bg-tertiary ${
-                selectedConnection?.id === c.id ? "bg-bg-tertiary" : ""
-              }`}
-              onClick={() => handleClick(c)}
-              onDoubleClick={() => handleDoubleClick(c)}
-              onContextMenu={(e) => handleContextMenu(e, c)}
-            >
+          filtered.map((c) => {
+            const profile = resolveColorProfile(
+              c.colorProfileId,
+              customProfiles,
+              c.color
+            );
+            const isSelected = selectedConnection?.id === c.id;
+            return (
               <div
-                className="h-3 w-3 shrink-0 rounded-full"
-                style={{ backgroundColor: c.color || "#555" }}
-              />
-              <div className="min-w-0">
-                <div className="break-words text-sm font-medium leading-4 text-text-primary [overflow-wrap:anywhere]">
-                  {c.name || c.serverName}
-                </div>
-                <div className="mt-0.5 break-words text-xs leading-4 text-text-secondary [overflow-wrap:anywhere]">
-                  {c.serverName}
-                  {c.database ? ` / ${c.database}` : ""}
-                  {c.username ? ` — ${c.username}` : ""}
-                </div>
-              </div>
-              <div className="flex shrink-0 items-start gap-1">
-                <span className="rounded bg-bg-tertiary px-1.5 py-0.5 text-xs text-text-secondary">
-                  {AUTH_TYPE_LABELS[c.authType] || c.authType}
-                </span>
+                key={c.id}
+                className="group grid grid-cols-[minmax(0,1fr)_auto] items-start gap-2 rounded px-2 py-1.5 hover:bg-bg-tertiary"
+                style={
+                  isSelected
+                    ? {
+                        backgroundColor: profile.background,
+                        color: profile.foreground,
+                      }
+                    : undefined
+                }
+                onContextMenu={(event) => handleContextMenu(event, c)}
+              >
                 <button
                   type="button"
-                  title="Delete connection"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleDelete(c);
-                  }}
-                  className="rounded p-0.5 text-text-secondary opacity-0 hover:text-error group-hover:opacity-100 focus:opacity-100"
+                  aria-pressed={isSelected}
+                  className="grid min-w-0 grid-cols-[12px_minmax(0,1fr)] items-center gap-2 rounded text-left focus:outline-none focus:ring-1 focus:ring-accent-hover"
+                  onClick={() => handleClick(c)}
+                  onDoubleClick={() => handleDoubleClick(c)}
                 >
-                  <svg className="h-3.5 w-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
-                    <line x1="4" y1="4" x2="12" y2="12" />
-                    <line x1="12" y1="4" x2="4" y2="12" />
-                  </svg>
+                  <ColorProfileMarker profile={profile} size="md" />
+                  <span className="min-w-0">
+                    <span
+                      className="block break-words text-sm font-medium leading-4 text-text-primary [overflow-wrap:anywhere]"
+                      style={
+                        isSelected ? { color: profile.foreground } : undefined
+                      }
+                    >
+                      {getEffectiveAlias(c)}
+                    </span>
+                    <span
+                      className="mt-0.5 block break-words text-xs leading-4 text-text-secondary [overflow-wrap:anywhere]"
+                      style={
+                        isSelected ? { color: profile.foreground } : undefined
+                      }
+                    >
+                      {c.serverName}
+                      {c.database ? ` / ${c.database}` : ""}
+                      {c.username ? ` — ${c.username}` : ""}
+                    </span>
+                  </span>
                 </button>
+                <div className="flex shrink-0 items-start gap-1">
+                  <span
+                    className="rounded bg-bg-tertiary px-1.5 py-0.5 text-xs text-text-secondary"
+                    style={
+                      isSelected
+                        ? {
+                            backgroundColor: profile.background,
+                            color: profile.foreground,
+                          }
+                        : undefined
+                    }
+                  >
+                    {AUTH_TYPE_LABELS[c.authType] || c.authType}
+                  </span>
+                  <button
+                    type="button"
+                    aria-label={`Delete ${getEffectiveAlias(c)}`}
+                    title="Delete connection"
+                    onClick={() => handleDelete(c)}
+                    className="rounded p-0.5 text-text-secondary opacity-0 hover:text-error focus:opacity-100 focus:outline-none focus:ring-1 focus:ring-accent-hover group-hover:opacity-100"
+                  >
+                    <svg
+                      aria-hidden="true"
+                      className="h-3.5 w-3.5"
+                      viewBox="0 0 16 16"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="1.5"
+                    >
+                      <line x1="4" y1="4" x2="12" y2="12" />
+                      <line x1="12" y1="4" x2="4" y2="12" />
+                    </svg>
+                  </button>
+                </div>
               </div>
-            </div>
-          ))
+            );
+          })
         )}
       </div>
 

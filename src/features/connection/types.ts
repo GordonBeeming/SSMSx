@@ -3,7 +3,7 @@ export type EncryptMode = "Mandatory" | "Optional" | "Strict";
 
 export interface ConnectionInfo {
   id: string;
-  name: string;
+  name?: string | null;
   serverName: string;
   authType: AuthType;
   username?: string;
@@ -12,6 +12,8 @@ export interface ConnectionInfo {
   encrypt: EncryptMode;
   trustServerCertificate: boolean;
   connectionString?: string;
+  colorProfileId?: string;
+  /** Legacy foreground hex persisted by earlier releases. */
   color?: string;
   lastUsed?: string;
   createdAt: string;
@@ -28,6 +30,10 @@ export interface ConnectionConnectResult {
 
 export interface ConnectionDeleteResult {
   deleted: boolean;
+}
+
+export interface ConnectionColorProfileReassignResult {
+  updatedCount: number;
 }
 
 const AUTH_TYPE_VALUES: ReadonlySet<string> = new Set(["SqlAuth", "ConnectionString", "EntraMfa"]);

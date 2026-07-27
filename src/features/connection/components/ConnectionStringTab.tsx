@@ -5,6 +5,7 @@ import {
   CONNECTION_CANCELLED_MESSAGE,
   isConnectionCancellation,
 } from "../utils/connectionResult";
+import { AppearanceFields } from "./AppearanceFields";
 
 function parseConnectionString(cs: string): Partial<ConnectionInfo> {
   const parts: Record<string, string> = {};
@@ -52,6 +53,8 @@ export function ConnectionStringTab() {
     connect,
     saveConnection,
     testConnection,
+    appearanceDraft,
+    setFormDirty,
   } = useConnectionStore();
 
   const [cs, setCs] = useState(selectedConnection?.connectionString || "");
@@ -77,7 +80,8 @@ export function ConnectionStringTab() {
 
     const info: ConnectionInfo = {
       id: selectedConnection?.id || crypto.randomUUID(),
-      name: selectedConnection?.name || "",
+      name: appearanceDraft.name,
+      colorProfileId: appearanceDraft.colorProfileId,
       serverName: parsed.serverName,
       authType: parsed.authType || "SqlAuth",
       username: parsed.username,
@@ -89,6 +93,7 @@ export function ConnectionStringTab() {
     };
 
     selectConnection(info);
+    setFormDirty(true);
     setDialogTab("properties");
   };
 
@@ -97,7 +102,8 @@ export function ConnectionStringTab() {
     const parsed = parseConnectionString(cs);
     const info: ConnectionInfo = {
       id: selectedConnection?.id || crypto.randomUUID(),
-      name: selectedConnection?.name || "",
+      name: appearanceDraft.name,
+      colorProfileId: appearanceDraft.colorProfileId,
       serverName: parsed.serverName || "",
       authType: "ConnectionString",
       encrypt: parsed.encrypt || "Mandatory",
@@ -119,11 +125,16 @@ export function ConnectionStringTab() {
     <div className="flex h-full flex-col">
       <div className="flex-1 overflow-y-auto">
         <div className="flex flex-col gap-3">
+          <AppearanceFields />
           <div>
-            <label className="mb-1 block text-xs text-text-secondary">
+            <label
+              className="mb-1 block text-xs text-text-secondary"
+              htmlFor="connection-string"
+            >
               Connection String
             </label>
             <textarea
+              id="connection-string"
               value={cs}
               onChange={(e) => {
                 setCs(e.target.value);

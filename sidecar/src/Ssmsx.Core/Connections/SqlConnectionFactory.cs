@@ -6,7 +6,7 @@ namespace Ssmsx.Core.Connections;
 
 public class SqlConnectionFactory
 {
-    public async Task<SqlConnection> CreateAsync(
+    public virtual async Task<SqlConnection> CreateAsync(
         ConnectionInfo info,
         ICredentialStore credentialStore,
         string? inlinePassword = null,
@@ -28,15 +28,31 @@ public class SqlConnectionFactory
     private static async Task<SqlConnection> OpenConnectionAsync(string connectionString, CancellationToken ct)
     {
         var connection = new SqlConnection(connectionString);
-        await connection.OpenAsync(ct);
-        return connection;
+        try
+        {
+            await connection.OpenAsync(ct);
+            return connection;
+        }
+        catch
+        {
+            await connection.DisposeAsync();
+            throw;
+        }
     }
 
     private async Task<SqlConnection> CreateEntraMfaConnectionAsync(ConnectionInfo info, CancellationToken ct)
     {
         var connection = new SqlConnection(BuildEntraMfaConnectionString(info));
-        await connection.OpenAsync(ct);
-        return connection;
+        try
+        {
+            await connection.OpenAsync(ct);
+            return connection;
+        }
+        catch
+        {
+            await connection.DisposeAsync();
+            throw;
+        }
     }
 
     internal static string BuildEntraMfaConnectionString(ConnectionInfo info)

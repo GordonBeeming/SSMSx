@@ -95,6 +95,9 @@ jobs:
       - name: Install npm dependencies
         run: npm ci
 
+      - name: Run frontend tests
+        run: npm run test:frontend
+
       - name: Build frontend
         run: npm run build
 
@@ -104,6 +107,9 @@ jobs:
       # ── .NET sidecar ─────────────────────────────────────────
       - name: Build .NET sidecar
         run: dotnet build sidecar/Ssmsx.Sidecar.slnx
+
+      - name: Run sidecar JSON-RPC contract test
+        run: node scripts/test-sidecar-contract.mjs
 
       - name: Run .NET tests
         run: dotnet test sidecar/Ssmsx.Sidecar.slnx --filter "Category!=Integration"

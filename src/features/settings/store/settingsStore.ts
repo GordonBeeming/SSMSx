@@ -1,20 +1,32 @@
 import { create } from "zustand";
-import type { AppSettings } from "../types";
+import type { AppSettings, CustomColorProfile } from "../types";
 import { defaultSettings } from "../settingsSchema";
+import {
+  BUILT_IN_COLOR_PROFILES,
+  normalizeCustomColorProfiles,
+  validateCustomColorProfile,
+} from "../../../shared/connectionAppearance";
 
-const SETTINGS_STORAGE_KEY = "ssmsx.settings";
+export const SETTINGS_STORAGE_KEY = "ssmsx.settings";
+export const SAVE_SETTINGS_ERROR =
+  "Could not save settings. Check that local storage is available, then try again.";
 
 interface SettingsState {
   settings: AppSettings;
-  setGroupTablesBySchema: (value: boolean) => void;
-  setPersistQueryTabs: (value: boolean) => void;
+  setGroupTablesBySchema: (value: boolean) => string | null;
+  setPersistQueryTabs: (value: boolean) => string | null;
+  saveColorProfiles: (profiles: CustomColorProfile[]) => string | null;
 }
 
 function readBoolean(value: unknown, fallback: boolean): boolean {
   return typeof value === "boolean" ? value : fallback;
 }
 
-function loadSettings(): AppSettings {
+function readColorProfiles(value: unknown): CustomColorProfile[] {
+  return normalizeCustomColorProfiles(value);
+}
+
+export function loadSettings(): AppSettings {
   try {
     const storedValue = window.localStorage.getItem(SETTINGS_STORAGE_KEY);
     if (!storedValue) return defaultSettings;
@@ -35,46 +47,90 @@ function loadSettings(): AppSettings {
           defaultSettings.workspace.persistQueryTabs
         ),
       },
+      connections: {
+        colorProfiles: readColorProfiles(parsed.connections?.colorProfiles),
+      },
     };
-  } catch {
+  } catch (cause) {
+    console.warn("Failed to load settings:", cause);
     return defaultSettings;
   }
 }
 
-function saveSettings(settings: AppSettings): void {
+export function saveSettings(settings: AppSettings): string | null {
   try {
     window.localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settings));
-  } catch {
-    // Ignore storage failures; preferences should still work for this session.
+    return null;
+  } catch (cause) {
+    console.error("Failed to save settings:", cause);
+    return SAVE_SETTINGS_ERROR;
   }
 }
 
-export const useSettingsStore = create<SettingsState>((set) => ({
+export const useSettingsStore = create<SettingsState>((set, get) => ({
   settings: loadSettings(),
 
-  setGroupTablesBySchema: (value) =>
-    set((state) => {
-      const settings: AppSettings = {
-        ...state.settings,
-        explorer: {
-          ...state.settings.explorer,
-          groupTablesBySchema: value,
-        },
-      };
-      saveSettings(settings);
-      return { settings };
-    }),
+  setGroupTablesBySchema: (value) => {
+    const current = get().settings;
+    const settings: AppSettings = {
+      ...current,
+      explorer: {
+        ...current.explorer,
+        groupTablesBySchema: value,
+      },
+    };
+    const saveError = saveSettings(settings);
+    if (saveError) return saveError;
+    set({ settings });
+    return null;
+  },
 
-  setPersistQueryTabs: (value) =>
-    set((state) => {
-      const settings: AppSettings = {
-        ...state.settings,
-        workspace: {
-          ...state.settings.workspace,
-          persistQueryTabs: value,
-        },
-      };
-      saveSettings(settings);
-      return { settings };
-    }),
+  setPersistQueryTabs: (value) => {
+    const current = get().settings;
+    const settings: AppSettings = {
+      ...current,
+      workspace: {
+        ...current.workspace,
+        persistQueryTabs: value,
+      },
+    };
+    const saveError = saveSettings(settings);
+    if (saveError) return saveError;
+    set({ settings });
+    return null;
+  },
+
+  saveColorProfiles: (profiles) => {
+    const normalized: CustomColorProfile[] = [];
+    for (const profile of profiles) {
+      if (
+        BUILT_IN_COLOR_PROFILES.some((builtIn) => builtIn.id === profile.id) ||
+        normalized.some((existing) => existing.id === profile.id)
+      ) {
+        return "Profile IDs must be unique and cannot use a built-in ID.";
+      }
+      const error = validateCustomColorProfile(profile, normalized, profile.id);
+      if (error) return error;
+      normalized.push({
+        ...profile,
+        name: profile.name.trim(),
+        background: profile.background.toUpperCase(),
+        foreground: profile.foreground.toUpperCase(),
+        builtIn: false,
+      });
+    }
+
+    const current = get().settings;
+    const settings: AppSettings = {
+      ...current,
+      connections: {
+        ...current.connections,
+        colorProfiles: normalized,
+      },
+    };
+    const saveError = saveSettings(settings);
+    if (saveError) return saveError;
+    set({ settings });
+    return null;
+  },
 }));

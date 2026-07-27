@@ -5,22 +5,24 @@ const AUTH_LABELS = { SqlAuth: "SQL", ConnectionString: "CS", EntraMfa: "Entra" 
 
 /**
  * SSMSX ConnectionItem — a saved-connection row from the connection list.
- * Color dot, name + server/database/user detail, and an auth-type chip.
+ * Required colour profile, optional alias + server/database/user detail, and an auth-type chip.
  */
 export function ConnectionItem({
-  name,
+  alias,
   serverName,
   database,
   username,
   authType = "SqlAuth",
-  color = "var(--conn-slate)",
+  profileBackground,
+  profileForeground,
   selected = false,
   onClick,
   onDoubleClick,
   style,
 }) {
   const [hover, setHover] = React.useState(false);
-  const bg = selected || hover ? "var(--surface-raised)" : "transparent";
+  const bg = selected ? profileBackground : hover ? "var(--surface-raised)" : "transparent";
+  const fg = selected ? profileForeground : "var(--text-primary)";
   const detail = [serverName, database && `/ ${database}`, username && `— ${username}`].filter(Boolean).join(" ");
 
   return (
@@ -41,12 +43,12 @@ export function ConnectionItem({
         ...style,
       }}
     >
-      <span style={{ width: 12, height: 12, borderRadius: "var(--radius-full)", background: color, flexShrink: 0 }} />
+      <span style={{ width: 3, alignSelf: "stretch", minHeight: 20, borderRadius: "var(--radius-full)", background: profileForeground, flexShrink: 0 }} />
       <div style={{ minWidth: 0, flex: 1 }}>
-        <div style={{ fontSize: "var(--text-sm)", fontWeight: "var(--weight-medium)", color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-          {name || serverName}
+        <div style={{ fontSize: "var(--text-sm)", fontWeight: "var(--weight-medium)", color: fg, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          {alias || serverName}
         </div>
-        <div style={{ fontSize: "var(--text-xs)", color: "var(--text-secondary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+        <div style={{ fontSize: "var(--text-xs)", color: selected ? profileForeground : "var(--text-secondary)", opacity: selected ? 0.82 : 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
           {detail}
         </div>
       </div>

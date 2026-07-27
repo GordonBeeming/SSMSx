@@ -15,6 +15,15 @@ public record ConnectionDeleteParams
     public required string Id { get; init; }
 }
 
+public record ConnectionReassignColorProfileParams
+{
+    [JsonPropertyName("fromProfileId")]
+    public required string FromProfileId { get; init; }
+
+    [JsonPropertyName("toProfileId")]
+    public required string ToProfileId { get; init; }
+}
+
 public record ConnectionSaveParams
 {
     [JsonPropertyName("connection")]
@@ -73,4 +82,10 @@ public record ConnectionDeleteResult
 {
     [JsonPropertyName("deleted")]
     public bool Deleted { get; init; }
+}
+
+public record ConnectionReassignColorProfileResult
+{
+    [JsonPropertyName("updatedCount")]
+    public int UpdatedCount { get; init; }
 }

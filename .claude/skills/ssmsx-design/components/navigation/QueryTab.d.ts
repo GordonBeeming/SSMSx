@@ -11,12 +11,18 @@ export interface QueryTabProps {
   active?: boolean;
   /** Show the unsaved-changes dot. @default false */
   dirty?: boolean;
-  /** Connection color dot. */
-  color?: string;
+  /** Required connection-profile background colour. */
+  profileBackground: string;
+  /** Required connection-profile foreground colour and inactive marker. */
+  profileForeground: string;
+  /** Whether the tab is pinned into the first wrapping band. @default false */
+  pinned?: boolean;
+  onTogglePinned?: () => void;
   onSelect?: () => void;
   onClose?: () => void;
+  onContextMenu?: React.MouseEventHandler<HTMLDivElement>;
   style?: React.CSSProperties;
 }
 
-/** One tab in the query tab bar — connection dot, label, dirty marker, close. */
+/** One query tab — profile marker/pair, pin state, label, dirty marker, close. */
 export function QueryTab(props: QueryTabProps): React.ReactElement;

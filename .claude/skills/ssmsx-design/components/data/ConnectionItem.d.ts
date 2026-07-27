@@ -3,8 +3,8 @@ import React from "react";
 export type AuthType = "SqlAuth" | "ConnectionString" | "EntraMfa";
 
 export interface ConnectionItemProps {
-  /** Display name (falls back to serverName). */
-  name?: string;
+  /** Optional display alias (falls back to serverName). */
+  alias?: string;
   /** SQL Server host/instance. */
   serverName: string;
   /** Default database. */
@@ -13,8 +13,10 @@ export interface ConnectionItemProps {
   username?: string;
   /** Authentication type — drives the chip label. @default "SqlAuth" */
   authType?: AuthType;
-  /** Connection color dot. @default neutral slate */
-  color?: string;
+  /** Required connection-profile background colour. */
+  profileBackground: string;
+  /** Required connection-profile foreground colour. */
+  profileForeground: string;
   /** Selected state. @default false */
   selected?: boolean;
   onClick?: () => void;
@@ -23,7 +25,7 @@ export interface ConnectionItemProps {
 }
 
 /**
- * A saved-connection row — color dot, name, server detail, auth-type chip.
+ * A saved-connection row — profile marker, alias/server detail, auth-type chip.
  *
  * @startingPoint section="Connections" subtitle="Saved connection list rows" viewport="360x220"
  */

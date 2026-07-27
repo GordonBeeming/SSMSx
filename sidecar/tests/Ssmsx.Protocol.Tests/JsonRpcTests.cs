@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Ssmsx.Protocol;
+using Ssmsx.Protocol.Messages;
 using Xunit;
 
 namespace Ssmsx.Protocol.Tests;
@@ -49,5 +50,26 @@ public class JsonRpcTests
         Assert.NotNull(request);
         Assert.NotNull(request.Params);
         Assert.Equal("SELECT 1", request.Params.Value.GetProperty("sql").GetString());
+    }
+
+    [Fact]
+    public void ReassignColorProfileMessages_RoundTripExpectedContract()
+    {
+        var parameters = new ConnectionReassignColorProfileParams
+        {
+            FromProfileId = "custom",
+            ToProfileId = "red"
+        };
+        var result = new ConnectionReassignColorProfileResult { UpdatedCount = 3 };
+
+        var parametersJson = JsonSerializer.Serialize(
+            parameters,
+            ProtocolJsonContext.Default.ConnectionReassignColorProfileParams);
+        var resultJson = JsonSerializer.Serialize(
+            result,
+            ProtocolJsonContext.Default.ConnectionReassignColorProfileResult);
+
+        Assert.Equal("{\"fromProfileId\":\"custom\",\"toProfileId\":\"red\"}", parametersJson);
+        Assert.Equal("{\"updatedCount\":3}", resultJson);
     }
 }

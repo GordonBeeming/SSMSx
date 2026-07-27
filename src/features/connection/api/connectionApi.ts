@@ -4,6 +4,7 @@ import type {
   ConnectionTestResult,
   ConnectionConnectResult,
   ConnectionDeleteResult,
+  ConnectionColorProfileReassignResult,
 } from "../types";
 
 export async function connectionList(): Promise<ConnectionInfo[]> {
@@ -27,6 +28,17 @@ export async function connectionSave(
 
 export async function connectionDelete(id: string): Promise<ConnectionDeleteResult> {
   const result = await invoke<string>("connection_delete", { id });
+  return JSON.parse(result);
+}
+
+export async function connectionReassignColorProfile(
+  fromProfileId: string,
+  toProfileId: string
+): Promise<ConnectionColorProfileReassignResult> {
+  const result = await invoke<string>("connection_reassign_color_profile", {
+    fromProfileId,
+    toProfileId,
+  });
   return JSON.parse(result);
 }
 

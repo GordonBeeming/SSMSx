@@ -3,12 +3,10 @@ import { useConnectionStore, type DialogTab } from "../store/connectionStore";
 import { ConnectionList } from "./ConnectionList";
 import { PropertiesTab } from "./PropertiesTab";
 import { ConnectionStringTab } from "./ConnectionStringTab";
-import { CustomTab } from "./CustomTab";
 
 const TABS: { key: DialogTab; label: string }[] = [
   { key: "properties", label: "Properties" },
   { key: "connectionString", label: "Connection String" },
-  { key: "custom", label: "Custom" },
 ];
 
 export function ConnectionDialog() {
@@ -79,7 +77,6 @@ export function ConnectionDialog() {
             <div className="flex min-h-0 flex-1 flex-col p-4">
               {dialogTab === "properties" && <PropertiesTab />}
               {dialogTab === "connectionString" && <ConnectionStringTab />}
-              {dialogTab === "custom" && <CustomTab />}
             </div>
 
             {/* Error bar */}

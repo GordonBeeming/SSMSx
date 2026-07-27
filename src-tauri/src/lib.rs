@@ -7,37 +7,54 @@ use tauri::{Emitter, Manager};
 pub fn run() {
     let _ = env_logger::try_init();
 
+    let builder = tauri::Builder::default();
+
+    // Tauri requires the single-instance plugin to be registered before every
+    // other plugin so a second launch exits before it can start another sidecar.
+    #[cfg(desktop)]
+    let builder = builder.plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+        if let Some(window) = app.get_webview_window("main") {
+            if let Err(error) = window.unminimize() {
+                log::warn!("Failed to restore the existing main window: {}", error);
+            }
+            if let Err(error) = window.show() {
+                log::warn!("Failed to show the existing main window: {}", error);
+            }
+            if let Err(error) = window.set_focus() {
+                log::warn!("Failed to focus the existing main window: {}", error);
+            }
+        }
+    }));
+
     #[cfg_attr(not(feature = "dev-mcp"), allow(unused_mut))]
-    let mut builder = tauri::Builder::default()
-        .plugin(tauri_plugin_shell::init())
-        .setup(|app| {
-            let handle = app.handle().clone();
-            let sidecar_manager = sidecar::SidecarManager::new();
+    let mut builder = builder.plugin(tauri_plugin_shell::init()).setup(|app| {
+        let handle = app.handle().clone();
+        let sidecar_manager = sidecar::SidecarManager::new();
 
-            // Spawn sidecar on startup
-            let manager = sidecar_manager.clone();
-            tauri::async_runtime::spawn(async move {
-                if let Err(e) = manager.start(&handle).await {
-                    log::error!("Failed to start sidecar: {}", e);
-                }
-            });
+        // Spawn sidecar on startup
+        let manager = sidecar_manager.clone();
+        tauri::async_runtime::spawn(async move {
+            if let Err(e) = manager.start(&handle).await {
+                log::error!("Failed to start sidecar: {}", e);
+            }
+        });
 
-            app.manage(sidecar_manager);
+        app.manage(sidecar_manager);
 
-            // Build application menu
-            build_menu(app)?;
+        // Build application menu
+        build_menu(app)?;
 
-            #[cfg(debug_assertions)]
-            {
-                if std::env::var("SSMSX_OPEN_DEVTOOLS").ok().as_deref() == Some("1") {
-                    if let Some(window) = app.get_webview_window("main") {
-                        window.open_devtools();
-                    }
+        #[cfg(debug_assertions)]
+        {
+            if std::env::var("SSMSX_OPEN_DEVTOOLS").ok().as_deref() == Some("1") {
+                if let Some(window) = app.get_webview_window("main") {
+                    window.open_devtools();
                 }
             }
+        }
 
-            Ok(())
-        });
+        Ok(())
+    });
 
     #[cfg(feature = "dev-mcp")]
     {
@@ -60,6 +77,7 @@ pub fn run() {
             commands::connection::connection_get,
             commands::connection::connection_save,
             commands::connection::connection_delete,
+            commands::connection::connection_reassign_color_profile,
             commands::connection::connection_test,
             commands::connection::connection_connect,
             commands::connection::connection_cancel_request,

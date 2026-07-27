@@ -17,6 +17,7 @@ Console.OutputEncoding = System.Text.Encoding.UTF8;
 var connectionStore = new ConnectionStore();
 var credentialStore = CredentialStoreFactory.Create();
 var connectionManager = new ConnectionManager();
+var connectionOperations = new ConnectionOperationCoordinator();
 var schemaDiscovery = new SchemaDiscoveryService(connectionManager);
 var queryCancellationManager = new QueryCancellationManager();
 var queryExecutor = new QueryExecutor(connectionManager, queryCancellationManager);
@@ -127,15 +128,17 @@ var handlers = new Dictionary<string, Func<JsonElement?, Task<JsonElement>>>
         return JsonSerializer.SerializeToElement(saved, ProtocolJsonContext.Default.ConnectionInfo);
     },
 
-    ["connection.delete"] = async p =>
+    ["connection.reassignColorProfile"] = async p =>
     {
-        var args = Deserialize<ConnectionDeleteParams>(p, ProtocolJsonContext.Default.ConnectionDeleteParams);
-        try { await credentialStore.DeleteAsync($"ssmsx/{args.Id}"); }
-        catch (Exception ex) { await Console.Error.WriteLineAsync($"Warning: Failed to delete credential for connection '{args.Id}': {ex.Message}"); }
-        var deleted = await connectionStore.DeleteAsync(args.Id);
+        var args = Deserialize<ConnectionReassignColorProfileParams>(
+            p,
+            ProtocolJsonContext.Default.ConnectionReassignColorProfileParams);
+        var updatedCount = await connectionStore.ReassignColorProfileAsync(
+            args.FromProfileId,
+            args.ToProfileId);
         return JsonSerializer.SerializeToElement(
-            new ConnectionDeleteResult { Deleted = deleted },
-            ProtocolJsonContext.Default.ConnectionDeleteResult);
+            new ConnectionReassignColorProfileResult { UpdatedCount = updatedCount },
+            ProtocolJsonContext.Default.ConnectionReassignColorProfileResult);
     },
 
     ["connection.disconnect"] = async p =>
@@ -243,6 +246,21 @@ static string SidecarVersion()
 
 var cancellableHandlers = new Dictionary<string, Func<JsonElement?, CancellationToken, Task<JsonElement>>>
 {
+    ["connection.delete"] = async (p, _) =>
+    {
+        var args = Deserialize<ConnectionDeleteParams>(p, ProtocolJsonContext.Default.ConnectionDeleteParams);
+        return await connectionOperations.RunAsync(args.Id, async () =>
+        {
+            await connectionManager.DisconnectAsync(args.Id);
+            try { await credentialStore.DeleteAsync($"ssmsx/{args.Id}"); }
+            catch (Exception ex) { await Console.Error.WriteLineAsync($"Warning: Failed to delete credential for connection '{args.Id}': {ex.Message}"); }
+            var deleted = await connectionStore.DeleteAsync(args.Id);
+            return JsonSerializer.SerializeToElement(
+                new ConnectionDeleteResult { Deleted = deleted },
+                ProtocolJsonContext.Default.ConnectionDeleteResult);
+        });
+    },
+
     ["connection.test"] = async (p, ct) =>
     {
         var args = Deserialize<ConnectionTestParams>(p, ProtocolJsonContext.Default.ConnectionTestParams);
@@ -269,10 +287,13 @@ var cancellableHandlers = new Dictionary<string, Func<JsonElement?, Cancellation
     ["connection.connect"] = async (p, ct) =>
     {
         var args = Deserialize<ConnectionConnectParams>(p, ProtocolJsonContext.Default.ConnectionConnectParams);
-        var connId = await connectionManager.ConnectAsync(args.Id, connectionStore, credentialStore, ct);
-        return JsonSerializer.SerializeToElement(
-            new ConnectionConnectResult { ConnectionId = connId },
-            ProtocolJsonContext.Default.ConnectionConnectResult);
+        return await connectionOperations.RunAsync(args.Id, async () =>
+        {
+            var connId = await connectionManager.ConnectAsync(args.Id, connectionStore, credentialStore, ct);
+            return JsonSerializer.SerializeToElement(
+                new ConnectionConnectResult { ConnectionId = connId },
+                ProtocolJsonContext.Default.ConnectionConnectResult);
+        }, ct);
     },
 };
 

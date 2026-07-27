@@ -4,11 +4,11 @@
 
 :root {
   /* ---- Corner radius ---- */
-  --radius-xs:   2px;  /* chips, color dots framing, tiny buttons */
+  --radius-xs:   2px;  /* chips, profile-marker framing, tiny buttons */
   --radius-sm:   4px;  /* buttons, inputs, tabs, default control radius */
   --radius-md:   6px;  /* cards, grouped panels */
   --radius-lg:   8px;  /* dialogs / modal surfaces */
-  --radius-full: 9999px; /* connection color dots, pills */
+  --radius-full: 9999px; /* connection-profile markers, pills */
 
   /* ---- Borders ---- */
   --border-width: 1px;

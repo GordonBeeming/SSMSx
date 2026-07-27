@@ -14,6 +14,7 @@ namespace Ssmsx.Protocol;
 [JsonSerializable(typeof(EncryptMode))]
 [JsonSerializable(typeof(ConnectionGetParams))]
 [JsonSerializable(typeof(ConnectionDeleteParams))]
+[JsonSerializable(typeof(ConnectionReassignColorProfileParams))]
 [JsonSerializable(typeof(ConnectionSaveParams))]
 [JsonSerializable(typeof(ConnectionTestParams))]
 [JsonSerializable(typeof(ConnectionConnectParams))]
@@ -22,6 +23,7 @@ namespace Ssmsx.Protocol;
 [JsonSerializable(typeof(ConnectionTestResult))]
 [JsonSerializable(typeof(ConnectionConnectResult))]
 [JsonSerializable(typeof(ConnectionDeleteResult))]
+[JsonSerializable(typeof(ConnectionReassignColorProfileResult))]
 [JsonSerializable(typeof(bool))]
 [JsonSerializable(typeof(object))]
 // Explorer DTOs

@@ -3,7 +3,7 @@ import { NodeIcon } from "./NodeIcon";
 
 /**
  * SSMSX Object Explorer tree row — chevron, node icon, label. Indents by depth,
- * accent-tinted when selected. Server rows can show a connection color dot.
+ * accent-tinted when selected. Server rows show the connection-profile foreground marker.
  */
 export function TreeRow({
   type,
@@ -13,7 +13,7 @@ export function TreeRow({
   hasChildren = false,
   loading = false,
   selected = false,
-  color,
+  profileForeground,
   onToggle,
   onSelect,
   style,
@@ -59,8 +59,8 @@ export function TreeRow({
         ) : null}
       </span>
 
-      {type === "server" && color && (
-        <span style={{ width: 10, height: 10, borderRadius: "var(--radius-full)", background: color, flexShrink: 0 }} />
+      {type === "server" && profileForeground && (
+        <span style={{ width: 10, height: 10, borderRadius: "var(--radius-full)", background: profileForeground, flexShrink: 0 }} />
       )}
 
       <NodeIcon type={type} />

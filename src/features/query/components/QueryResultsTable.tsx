@@ -6,14 +6,25 @@ import {
   useState,
   type KeyboardEvent as ReactKeyboardEvent,
   type MouseEvent as ReactMouseEvent,
+  type PointerEvent as ReactPointerEvent,
 } from "react";
 import { Check, Copy, Rows3 } from "lucide-react";
 import { ContextMenu } from "../../../shared/components/ContextMenu";
 import type { ContextMenuItem } from "../../../shared/components/ContextMenu";
 import type { QueryResult, QueryResultSet } from "../types";
+import type { ColorProfile } from "../../settings/types";
+import {
+  MAX_RESULT_COLUMN_WIDTH,
+  MIN_RESULT_COLUMN_WIDTH,
+  clampResultColumnWidth,
+  estimateResultColumnWidths,
+} from "../utils/resultColumnSizing";
+import { ColorProfileMarker } from "../../../shared/components/ColorProfileMarker";
 
 interface QueryResultsTableProps {
   result: QueryResult;
+  profile: ColorProfile | null;
+  tabId: string;
 }
 
 /** Maximum rows to render in the basic table (M4 will replace with virtualization) */
@@ -63,7 +74,12 @@ interface GridContextMenu {
   y: number;
 }
 
-export function QueryResultsTable({ result }: QueryResultsTableProps) {
+interface ColumnSizing {
+  key: string;
+  widths: number[];
+}
+
+export function QueryResultsTable({ result, profile, tabId }: QueryResultsTableProps) {
   const resultSets =
     result.resultSets.length > 0
       ? result.resultSets
@@ -95,7 +111,9 @@ export function QueryResultsTable({ result }: QueryResultsTableProps) {
   const [allRowsSelected, setAllRowsSelected] = useState(false);
   const [contextMenu, setContextMenu] = useState<GridContextMenu | null>(null);
   const [copyStatus, setCopyStatus] = useState<string | null>(null);
+  const [columnSizing, setColumnSizing] = useState<ColumnSizing | null>(null);
   const gridRef = useRef<HTMLDivElement>(null);
+  const resizeCleanupRef = useRef<(() => void) | null>(null);
   // Read inside the per-cell onMouseEnter handler; a ref avoids re-subscribing
   // every cell on each drag-state change.
   const isDraggingRef = useRef(false);
@@ -127,6 +145,77 @@ export function QueryResultsTable({ result }: QueryResultsTableProps) {
   const visibleRows = useMemo(
     () => activeResultSet?.rows.slice(0, MAX_DISPLAY_ROWS) ?? [],
     [activeResultSet]
+  );
+  const columnSizingKey = activeResultSet
+    ? `${tabId}:${activeResultSetIndex}:${activeResultSet.columns.map((column) => `${column.name}:${column.dataType}`).join("|")}`
+    : "none";
+  const estimatedColumnWidths = useMemo(
+    () => estimateResultColumnWidths(activeResultSet?.columns ?? [], visibleRows),
+    [activeResultSet?.columns, visibleRows]
+  );
+  const columnWidths = columnSizing?.key === columnSizingKey
+    ? columnSizing.widths
+    : estimatedColumnWidths;
+  const tableWidth = columnWidths.reduce((total, width) => total + width, 0);
+
+  const startColumnResize = useCallback(
+    (event: ReactPointerEvent<HTMLDivElement>, columnIndex: number) => {
+      event.preventDefault();
+      event.stopPropagation();
+      resizeCleanupRef.current?.();
+      const startX = event.clientX;
+      const startWidth = columnWidths[columnIndex] ?? 0;
+      const startingWidths = [...columnWidths];
+
+      const onPointerMove = (moveEvent: PointerEvent) => {
+        const nextWidths = [...startingWidths];
+        nextWidths[columnIndex] = clampResultColumnWidth(
+          startWidth + moveEvent.clientX - startX
+        );
+        setColumnSizing({ key: columnSizingKey, widths: nextWidths });
+      };
+      const stop = () => {
+        document.removeEventListener("pointermove", onPointerMove);
+        document.removeEventListener("pointerup", stop);
+        document.removeEventListener("pointercancel", stop);
+        if (resizeCleanupRef.current === stop) {
+          resizeCleanupRef.current = null;
+        }
+      };
+
+      resizeCleanupRef.current = stop;
+      document.addEventListener("pointermove", onPointerMove);
+      document.addEventListener("pointerup", stop);
+      document.addEventListener("pointercancel", stop);
+    },
+    [columnSizingKey, columnWidths]
+  );
+
+  useEffect(() => () => resizeCleanupRef.current?.(), []);
+
+  const resizeColumnWithKeyboard = useCallback(
+    (event: ReactKeyboardEvent<HTMLDivElement>, columnIndex: number) => {
+      const currentWidth = columnWidths[columnIndex] ?? MIN_RESULT_COLUMN_WIDTH;
+      const step = event.shiftKey ? 32 : 8;
+      const nextWidth =
+        event.key === "ArrowLeft"
+          ? currentWidth - step
+          : event.key === "ArrowRight"
+            ? currentWidth + step
+            : event.key === "Home"
+              ? MIN_RESULT_COLUMN_WIDTH
+              : event.key === "End"
+                ? MAX_RESULT_COLUMN_WIDTH
+                : null;
+
+      if (nextWidth === null) return;
+      event.preventDefault();
+      event.stopPropagation();
+      const nextWidths = [...columnWidths];
+      nextWidths[columnIndex] = clampResultColumnWidth(nextWidth);
+      setColumnSizing({ key: columnSizingKey, widths: nextWidths });
+    },
+    [columnSizingKey, columnWidths]
   );
 
   useEffect(() => {
@@ -392,8 +481,14 @@ export function QueryResultsTable({ result }: QueryResultsTableProps) {
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
       {/* Tab header — both tabs are clickable when present */}
-      <div className="flex border-b border-bg-tertiary bg-bg-secondary text-xs">
-        <div className="flex min-w-0 flex-1">
+      <div
+        data-testid="result-tab-strip"
+        className="flex flex-wrap border-b border-bg-tertiary bg-bg-secondary text-xs"
+      >
+        <div
+          aria-label="Query result tabs"
+          className="flex min-w-0 flex-1 flex-wrap"
+        >
           {hasData && (
             visibleResultSets.map((set, index) => (
               <button
@@ -403,12 +498,10 @@ export function QueryResultsTable({ result }: QueryResultsTableProps) {
                   setActiveTab("results");
                   setActiveResultSetIndex(index);
                 }}
-                className={`px-3 py-1 ${
-                  activeTab === "results" && activeResultSetIndex === index
-                    ? "border-b-2 border-accent text-text-primary"
-                    : "text-text-secondary hover:text-text-primary"
-                }`}
+                className={`inline-flex items-center gap-1.5 px-3 py-1 ${activeTab === "results" && activeResultSetIndex === index ? "border-b-2 border-accent text-text-primary" : "text-text-secondary hover:text-text-primary"}`}
+                style={activeTab === "results" && activeResultSetIndex === index && profile ? { backgroundColor: profile.background, color: profile.foreground, borderBottomColor: profile.foreground } : undefined}
               >
+                {profile && <ColorProfileMarker profile={profile} size="xs" />}
                 Results {visibleResultSets.length > 1 ? index + 1 : ""} (
                 {set.totalRows.toLocaleString()})
               </button>
@@ -418,12 +511,10 @@ export function QueryResultsTable({ result }: QueryResultsTableProps) {
             <button
               type="button"
               onClick={() => setActiveTab("messages")}
-              className={`px-3 py-1 ${
-                activeTab === "messages"
-                  ? "border-b-2 border-accent text-text-primary"
-                  : "text-text-secondary hover:text-text-primary"
-              }`}
+              className={`inline-flex items-center gap-1.5 px-3 py-1 ${activeTab === "messages" ? "border-b-2 border-accent text-text-primary" : "text-text-secondary hover:text-text-primary"}`}
+              style={activeTab === "messages" && profile ? { backgroundColor: profile.background, color: profile.foreground, borderBottomColor: profile.foreground } : undefined}
             >
+              {profile && <ColorProfileMarker profile={profile} size="xs" />}
               Messages ({result.messages.length})
             </button>
           )}
@@ -480,16 +571,37 @@ export function QueryResultsTable({ result }: QueryResultsTableProps) {
           aria-label="Query results"
           onKeyDown={handleGridKeyDown}
         >
-          <table className="w-full border-collapse text-xs">
+          <table
+            className="border-collapse text-xs"
+            style={{ tableLayout: "fixed", width: tableWidth }}
+          >
+            <colgroup>
+              {columnWidths.map((width, index) => (
+                <col key={index} style={{ width }} />
+              ))}
+            </colgroup>
             <thead className="sticky top-0 bg-bg-secondary">
               <tr>
                 {activeResultSet.columns.map((col, i) => (
                   <th
                     key={`${col.name}-${i}`}
-                    className="whitespace-nowrap border-b border-r border-bg-tertiary px-2 py-1 text-left font-medium text-text-secondary"
-                    title={`${col.dataType}${col.isNullable ? " (nullable)" : ""}`}
+                    className="relative max-w-[500px] overflow-hidden whitespace-nowrap border-b border-r border-bg-tertiary px-2 py-1 pr-3 text-left font-medium text-text-secondary"
+                    title={`${col.name} — ${col.dataType}${col.isNullable ? " (nullable)" : ""}`}
                   >
-                    {col.name}
+                    <span className="block overflow-hidden text-ellipsis">{col.name}</span>
+                    <div
+                      role="separator"
+                      aria-orientation="vertical"
+                      aria-valuemin={MIN_RESULT_COLUMN_WIDTH}
+                      aria-valuemax={MAX_RESULT_COLUMN_WIDTH}
+                      aria-valuenow={Math.round(columnWidths[i])}
+                      aria-label={`Resize ${col.name} column`}
+                      title={`Resize ${col.name} column`}
+                      tabIndex={0}
+                      className="absolute right-0 top-0 h-full w-2 cursor-col-resize border-0 bg-transparent p-0 hover:bg-accent/15 focus:bg-accent/20 focus:outline-none"
+                      onPointerDown={(event) => startColumnResize(event, i)}
+                      onKeyDown={(event) => resizeColumnWithKeyboard(event, i)}
+                    />
                   </th>
                 ))}
               </tr>
@@ -501,7 +613,8 @@ export function QueryResultsTable({ result }: QueryResultsTableProps) {
                   className={`${allRowsSelected ? "bg-accent/10" : "hover:bg-bg-secondary"}`}
                   aria-selected={allRowsSelected}
                 >
-                  {row.map((cell, colIndex) => {
+                  {activeResultSet.columns.map((_, colIndex) => {
+                    const cell = row[colIndex];
                     const isFocus =
                       focusCell?.rowIndex === rowIndex &&
                       focusCell.colIndex === colIndex;
@@ -532,7 +645,8 @@ export function QueryResultsTable({ result }: QueryResultsTableProps) {
                         onContextMenu={(event) =>
                           handleCellContextMenu(event, rowIndex, colIndex)
                         }
-                        className={`whitespace-nowrap border-b border-r border-bg-tertiary px-2 py-0.5 text-text-primary ${
+                        title={formatCell(cell)}
+                        className={`max-w-[500px] overflow-hidden whitespace-nowrap text-ellipsis border-b border-r border-bg-tertiary px-2 py-0.5 text-text-primary ${
                           isFocus
                             ? "bg-accent/20 outline outline-1 -outline-offset-1 outline-accent"
                             : inRange

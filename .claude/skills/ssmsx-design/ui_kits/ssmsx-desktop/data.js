@@ -1,14 +1,21 @@
 // Fake schema + result data for the SSMSX desktop UI kit. Not real — for visual recreation only.
 window.SSMSX_DATA = {
+  profiles: [
+    { id: "red", name: "Red", profileBackground: "var(--conn-red-bg)", profileForeground: "var(--conn-red-fg)" },
+    { id: "green", name: "Green", profileBackground: "var(--conn-green-bg)", profileForeground: "var(--conn-green-fg)" },
+    { id: "amber", name: "Amber", profileBackground: "var(--conn-amber-bg)", profileForeground: "var(--conn-amber-fg)" },
+    { id: "blue", name: "Blue", profileBackground: "var(--conn-blue-bg)", profileForeground: "var(--conn-blue-fg)" },
+    { id: "violet", name: "Violet", profileBackground: "var(--conn-violet-bg)", profileForeground: "var(--conn-violet-fg)" },
+  ],
   connections: [
-    { id: "c1", name: "Prod — Reporting", serverName: "sql-prod-01.db", database: "Sales", username: "reader", authType: "EntraMfa", color: "var(--conn-red)" },
-    { id: "c2", name: "Local Dev", serverName: "localhost,1433", database: "Northwind", username: "sa", authType: "SqlAuth", color: "var(--conn-green)" },
-    { id: "c3", name: "Staging", serverName: "staging.internal", database: "App", authType: "ConnectionString", color: "var(--conn-amber)" },
+    { id: "c1", alias: "Prod — Reporting", serverName: "sql-prod-01.db", database: "Sales", username: "reader", authType: "EntraMfa", profileId: "red", profileBackground: "var(--conn-red-bg)", profileForeground: "var(--conn-red-fg)" },
+    { id: "c2", alias: "Local Dev", serverName: "localhost,1433", database: "Northwind", username: "sa", authType: "SqlAuth", profileId: "green", profileBackground: "var(--conn-green-bg)", profileForeground: "var(--conn-green-fg)" },
+    { id: "c3", alias: "Staging", serverName: "staging.internal", database: "App", authType: "ConnectionString", profileId: "amber", profileBackground: "var(--conn-amber-bg)", profileForeground: "var(--conn-amber-fg)" },
   ],
 
   // Object Explorer tree, flattened with depth. `id` used for expand toggling.
   tree: [
-    { id: "srv", type: "server", label: "sql-prod-01", depth: 0, hasChildren: true, color: "var(--conn-red)" },
+    { id: "srv", type: "server", label: "sql-prod-01", depth: 0, hasChildren: true, profileForeground: "var(--conn-red-fg)" },
     { id: "db-sales", type: "database", label: "Sales", depth: 1, hasChildren: true },
     { id: "f-tables", type: "folder", label: "Tables", depth: 2, hasChildren: true },
     { id: "t-customer", type: "table", label: "dbo.Customer", depth: 3, hasChildren: true },

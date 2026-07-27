@@ -13,6 +13,8 @@ import { SettingsDialog, useSettingsStore } from "../features/settings";
 import { isTauriRuntime } from "../shared/utils/tauri";
 import { AboutDialog } from "./AboutDialog";
 import type { ConnectionInfo } from "../features/connection";
+import { getEffectiveAlias, resolveColorProfile } from "../shared/connectionAppearance";
+import { ColorProfileMarker } from "../shared/components/ColorProfileMarker";
 
 let tabCounter = 0;
 
@@ -29,7 +31,7 @@ function getHighestQueryNumber(tabs: { title: string }[]): number {
 }
 
 function getConnectionLabel(connection: ConnectionInfo | undefined, connectionId: string): string {
-  return connection?.name || connection?.serverName || connectionId;
+  return connection ? getEffectiveAlias(connection) : connectionId;
 }
 
 function App() {
@@ -52,6 +54,7 @@ function App() {
   const activeTab = tabs.find((t) => t.id === activeTabId);
   const [aboutOpen, setAboutOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const colorProfiles = useSettingsStore((state) => state.settings.connections.colorProfiles);
   const startupInitializedRef = useRef(false);
 
   const createNewTab = useCallback(() => {
@@ -79,7 +82,6 @@ function App() {
       connectionId: sourceConn.id,
       database,
       title: `Query ${tabCounter}`,
-      connectionColor: sourceConn.color,
     });
   }, [tabs, activeTabId, activeConnections, addTab]);
 
@@ -146,7 +148,7 @@ function App() {
             if (tab.connectionId === connectionId) {
               useQueryStore
                 .getState()
-                .updateTab(tab.id, { connectionId: null, connectionColor: undefined });
+                .updateTab(tab.id, { connectionId: null });
             }
           }
           continue;
@@ -158,7 +160,7 @@ function App() {
             if (tab.connectionId === connectionId) {
               useQueryStore
                 .getState()
-                .updateTab(tab.id, { connectionId: null, connectionColor: undefined });
+                .updateTab(tab.id, { connectionId: null });
             }
           }
         }
@@ -253,7 +255,6 @@ function App() {
           database: detail.database,
           diagramViewId: detail.diagramViewId,
           title: detail.title || "Database Diagram",
-          connectionColor: connections.find((c) => c.id === detail.connectionId)?.color,
         });
       }
     };
@@ -386,16 +387,12 @@ function App() {
 
         {activeConnections.length > 0 && (
           <div className="flex items-center gap-3">
-            {activeConnections.map((conn) => (
-              <div key={conn.id} className="flex items-center gap-1.5">
-                {conn.color && (
-                  <div
-                    className="h-2.5 w-2.5 rounded-full"
-                    style={{ backgroundColor: conn.color }}
-                  />
-                )}
+            {activeConnections.map((conn) => {
+              const profile = resolveColorProfile(conn.colorProfileId, colorProfiles, conn.color);
+              return <div key={conn.id} className="flex items-center gap-1.5">
+                <ColorProfileMarker profile={profile} />
                 <span className="text-sm text-text-primary">
-                  {conn.name || conn.serverName}
+                  {getEffectiveAlias(conn)}
                 </span>
                 <button
                   onClick={() => disconnect(conn.id)}
@@ -404,7 +401,7 @@ function App() {
                   x
                 </button>
               </div>
-            ))}
+            })}
           </div>
         )}
 
