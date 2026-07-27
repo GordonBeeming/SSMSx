@@ -128,21 +128,6 @@ var handlers = new Dictionary<string, Func<JsonElement?, Task<JsonElement>>>
         return JsonSerializer.SerializeToElement(saved, ProtocolJsonContext.Default.ConnectionInfo);
     },
 
-    ["connection.delete"] = async p =>
-    {
-        var args = Deserialize<ConnectionDeleteParams>(p, ProtocolJsonContext.Default.ConnectionDeleteParams);
-        return await connectionOperations.RunAsync(args.Id, async () =>
-        {
-            await connectionManager.DisconnectAsync(args.Id);
-            try { await credentialStore.DeleteAsync($"ssmsx/{args.Id}"); }
-            catch (Exception ex) { await Console.Error.WriteLineAsync($"Warning: Failed to delete credential for connection '{args.Id}': {ex.Message}"); }
-            var deleted = await connectionStore.DeleteAsync(args.Id);
-            return JsonSerializer.SerializeToElement(
-                new ConnectionDeleteResult { Deleted = deleted },
-                ProtocolJsonContext.Default.ConnectionDeleteResult);
-        });
-    },
-
     ["connection.reassignColorProfile"] = async p =>
     {
         var args = Deserialize<ConnectionReassignColorProfileParams>(
@@ -261,6 +246,21 @@ static string SidecarVersion()
 
 var cancellableHandlers = new Dictionary<string, Func<JsonElement?, CancellationToken, Task<JsonElement>>>
 {
+    ["connection.delete"] = async (p, _) =>
+    {
+        var args = Deserialize<ConnectionDeleteParams>(p, ProtocolJsonContext.Default.ConnectionDeleteParams);
+        return await connectionOperations.RunAsync(args.Id, async () =>
+        {
+            await connectionManager.DisconnectAsync(args.Id);
+            try { await credentialStore.DeleteAsync($"ssmsx/{args.Id}"); }
+            catch (Exception ex) { await Console.Error.WriteLineAsync($"Warning: Failed to delete credential for connection '{args.Id}': {ex.Message}"); }
+            var deleted = await connectionStore.DeleteAsync(args.Id);
+            return JsonSerializer.SerializeToElement(
+                new ConnectionDeleteResult { Deleted = deleted },
+                ProtocolJsonContext.Default.ConnectionDeleteResult);
+        });
+    },
+
     ["connection.test"] = async (p, ct) =>
     {
         var args = Deserialize<ConnectionTestParams>(p, ProtocolJsonContext.Default.ConnectionTestParams);

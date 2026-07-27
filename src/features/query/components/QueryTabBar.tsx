@@ -139,6 +139,7 @@ export function QueryTabBar() {
             removeTab(tab.id);
           }}
           title="Close tab"
+          aria-label={`Close ${tab.title}`}
         >
           &times;
         </button>

@@ -204,6 +204,7 @@ export function QueryPanel() {
             >
               <QueryResultsTable
                 result={activeResult}
+                tabId={activeTabId}
                 profile={activeConnection
                   ? resolveColorProfile(
                       activeConnection.colorProfileId,

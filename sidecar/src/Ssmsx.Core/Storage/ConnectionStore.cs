@@ -310,13 +310,11 @@ public class ConnectionStore
         var normalizedIncoming = Normalize(incoming).Connection;
         var hasIncomingColorAppearance =
             incoming.HasExplicitColorProfileId || incoming.Color is not null;
-        var preserveOmittedAppearance =
-            incoming.Name is null && !hasIncomingColorAppearance;
 
         return normalizedIncoming with
         {
             Id = existing.Id,
-            Name = preserveOmittedAppearance ? normalizedExisting.Name : incoming.Name,
+            Name = incoming.Name ?? normalizedExisting.Name,
             ColorProfileId = hasIncomingColorAppearance
                 ? normalizedIncoming.ColorProfileId
                 : normalizedExisting.ColorProfileId,

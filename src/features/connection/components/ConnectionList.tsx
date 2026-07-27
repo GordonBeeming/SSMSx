@@ -199,6 +199,7 @@ export function ConnectionList() {
                       }
                     : undefined
                 }
+                onContextMenu={(event) => handleContextMenu(event, c)}
               >
                 <button
                   type="button"
@@ -206,7 +207,6 @@ export function ConnectionList() {
                   className="grid min-w-0 grid-cols-[12px_minmax(0,1fr)] items-center gap-2 rounded text-left focus:outline-none focus:ring-1 focus:ring-accent-hover"
                   onClick={() => handleClick(c)}
                   onDoubleClick={() => handleDoubleClick(c)}
-                  onContextMenu={(event) => handleContextMenu(event, c)}
                 >
                   <ColorProfileMarker profile={profile} size="md" />
                   <span className="min-w-0">

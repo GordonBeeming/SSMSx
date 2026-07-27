@@ -33,6 +33,7 @@ export function normalizeRestoredQueryTab(value: unknown): QueryTab | null {
   ) {
     return null;
   }
+  if (kind === "diagram" && typeof diagramViewId !== "string") return null;
 
   return {
     id,

@@ -158,7 +158,7 @@ describe("query results layout and resizing", () => {
 
   it("wraps result tabs, renders two-colour markers, and caps long columns at 500px", () => {
     const view = render(
-      <QueryResultsTable result={result} profile={nightProfile} />
+      <QueryResultsTable result={result} profile={nightProfile} tabId="query" />
     );
 
     expect(screen.getByTestId("result-tab-strip").className).toContain(
@@ -182,7 +182,7 @@ describe("query results layout and resizing", () => {
 
   it("resizes columns from the keyboard with separator value semantics", () => {
     const view = render(
-      <QueryResultsTable result={result} profile={nightProfile} />
+      <QueryResultsTable result={result} profile={nightProfile} tabId="query" />
     );
     const separator = screen.getByRole("separator", {
       name: "Resize Payload column",
@@ -212,7 +212,7 @@ describe("query results layout and resizing", () => {
 
   it("cleans up a pointer resize when the result table unmounts", () => {
     const removeEventListener = vi.spyOn(document, "removeEventListener");
-    const view = render(<QueryResultsTable result={result} profile={nightProfile} />);
+    const view = render(<QueryResultsTable result={result} profile={nightProfile} tabId="query" />);
     fireEvent.pointerDown(
       screen.getByRole("separator", { name: "Resize Payload column" }),
       { clientX: 200 }

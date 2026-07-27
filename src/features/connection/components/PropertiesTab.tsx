@@ -231,7 +231,10 @@ export function PropertiesTab() {
             <input
               type={showPassword ? "text" : "password"}
               value={password}
-              onChange={(e) => setPassword(e.target.value)}
+              onChange={(e) => {
+                setFormDirty(true);
+                setPassword(e.target.value);
+              }}
               placeholder={hasStoredPassword ? "••••••••  (saved)" : ""}
               className="w-full rounded border border-bg-tertiary bg-bg-input px-3 py-1.5 pr-16 text-sm text-text-primary placeholder:text-text-secondary focus:border-accent-hover focus:outline-none"
             />

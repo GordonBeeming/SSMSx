@@ -24,6 +24,7 @@ import { ColorProfileMarker } from "../../../shared/components/ColorProfileMarke
 interface QueryResultsTableProps {
   result: QueryResult;
   profile: ColorProfile | null;
+  tabId: string;
 }
 
 /** Maximum rows to render in the basic table (M4 will replace with virtualization) */
@@ -78,7 +79,7 @@ interface ColumnSizing {
   widths: number[];
 }
 
-export function QueryResultsTable({ result, profile }: QueryResultsTableProps) {
+export function QueryResultsTable({ result, profile, tabId }: QueryResultsTableProps) {
   const resultSets =
     result.resultSets.length > 0
       ? result.resultSets
@@ -146,7 +147,7 @@ export function QueryResultsTable({ result, profile }: QueryResultsTableProps) {
     [activeResultSet]
   );
   const columnSizingKey = activeResultSet
-    ? `${activeResultSetIndex}:${activeResultSet.columns.map((column) => `${column.name}:${column.dataType}`).join("|")}`
+    ? `${tabId}:${activeResultSetIndex}:${activeResultSet.columns.map((column) => `${column.name}:${column.dataType}`).join("|")}`
     : "none";
   const estimatedColumnWidths = useMemo(
     () => estimateResultColumnWidths(activeResultSet?.columns ?? [], visibleRows),

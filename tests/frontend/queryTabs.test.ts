@@ -37,6 +37,8 @@ test("restored query tabs preserve only a valid boolean pinned state", () => {
   assert.equal(normalizeRestoredQueryTab({ ...tab("legacy"), pinned: undefined })?.pinned, false);
   assert.equal(normalizeRestoredQueryTab({ ...tab("invalid"), pinned: "yes" })?.pinned, false);
   assert.equal(normalizeRestoredQueryTab({ title: "missing fields" }), null);
+  assert.equal(normalizeRestoredQueryTab({ ...tab("diagram"), kind: "diagram" }), null);
+  assert.equal(normalizeRestoredQueryTab({ ...tab("diagram"), kind: "diagram", diagramViewId: "view" })?.diagramViewId, "view");
 });
 
 test("result column widths are capped for auto sizing and drag resizing", () => {

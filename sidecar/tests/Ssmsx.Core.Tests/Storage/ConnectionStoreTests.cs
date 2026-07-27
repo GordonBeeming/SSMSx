@@ -387,10 +387,9 @@ public class ConnectionStoreTests : IDisposable
     }
 
     [Theory]
-    [InlineData(null)]
     [InlineData("")]
     [InlineData("   ")]
-    public async Task SaveAsync_SameId_AllowsAliasToBeCleared(string? alias)
+    public async Task SaveAsync_SameId_AllowsBlankAliasToBeCleared(string alias)
     {
         var existing = new ConnectionInfo
         {
@@ -532,7 +531,7 @@ public class ConnectionStoreTests : IDisposable
     [Fact]
     public async Task ListAsync_ReturnsNormalizedData_WhenMigrationRewriteFails()
     {
-        if (OperatingSystem.IsWindows())
+        if (OperatingSystem.IsWindows() || Environment.UserName == "root")
             return;
 
         await _store.ListAsync();
