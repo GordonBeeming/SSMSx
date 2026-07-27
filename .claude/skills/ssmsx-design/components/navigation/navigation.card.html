@@ -1,4 +1,4 @@
-<!-- @dsCard group="Components" viewport="700x150" name="Query tabs" subtitle="Tab bar items — connection dot, dirty marker, diagram tabs" -->
+<!-- @dsCard group="Components" viewport="700x190" name="Query tabs" subtitle="Wrapping pinned and unpinned bands with connection profiles" -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -7,7 +7,9 @@
 <style>
   body { margin: 0; font-family: var(--font-ui); background: var(--surface-panel); padding: 24px; }
   .lbl { font-size: var(--text-2xs); letter-spacing: var(--tracking-wider); text-transform: uppercase; color: var(--text-secondary); margin-bottom: 8px; }
-  .tabbar { display: flex; align-items: center; background: var(--surface-panel); border: 1px solid var(--border-default); border-radius: var(--radius-sm) var(--radius-sm) 0 0; width: max-content; }
+  .tabbar { display: flex; flex-direction: column; align-items: stretch; background: var(--surface-panel); border: 1px solid var(--border-default); border-radius: var(--radius-sm) var(--radius-sm) 0 0; width: 590px; }
+  .band { display: flex; flex-wrap: wrap; align-items: center; }
+  .band + .band { border-top: 1px solid var(--border-default); }
 </style>
 <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
 <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
@@ -23,9 +25,14 @@
       <div>
         <div className="lbl">Query tabs</div>
         <div className="tabbar">
-          <QueryTab title="Query 1" database="Sales" active color="var(--conn-red)" dirty />
-          <QueryTab title="Query 2" database="Northwind" color="var(--conn-green)" />
-          <QueryTab title="Database Diagram" kind="diagram" color="var(--conn-amber)" />
+          <div className="band">
+            <QueryTab title="Query 1" database="Sales" active pinned dirty profileBackground="var(--conn-red-bg)" profileForeground="var(--conn-red-fg)" />
+            <QueryTab title="Query 2" database="Sales" pinned profileBackground="var(--conn-red-bg)" profileForeground="var(--conn-red-fg)" />
+          </div>
+          <div className="band">
+            <QueryTab title="Query 3" database="Northwind" profileBackground="var(--conn-green-bg)" profileForeground="var(--conn-green-fg)" />
+            <QueryTab title="Database Diagram" kind="diagram" profileBackground="var(--conn-amber-bg)" profileForeground="var(--conn-amber-fg)" />
+          </div>
         </div>
       </div>
     );

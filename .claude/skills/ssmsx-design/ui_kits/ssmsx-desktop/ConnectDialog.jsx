@@ -5,10 +5,11 @@ function ConnectDialog({ onConnect, onClose }) {
   const data = window.SSMSX_DATA;
   const [tab, setTab] = React.useState("properties");
   const [selected, setSelected] = React.useState(data.connections[0]);
+  const [profileId, setProfileId] = React.useState(data.connections[0].profileId);
+  const [alias, setAlias] = React.useState(data.connections[0].alias || "");
   const tabs = [
     { key: "properties", label: "Properties" },
     { key: "connectionString", label: "Connection String" },
-    { key: "custom", label: "Custom" },
   ];
 
   const field = (label, child) => (
@@ -34,7 +35,7 @@ function ConnectDialog({ onConnect, onClose }) {
             <Input placeholder="Search connections..." style={{ marginBottom: 8 }} />
             {data.connections.map((c) => (
               <ConnectionItem key={c.id} {...c} selected={selected.id === c.id}
-                onClick={() => setSelected(c)} onDoubleClick={() => onConnect(c)} />
+                onClick={() => { setSelected(c); setProfileId(c.profileId); setAlias(c.alias || ""); }} onDoubleClick={() => onConnect(c)} />
             ))}
           </div>
           {/* form */}
@@ -48,6 +49,17 @@ function ConnectDialog({ onConnect, onClose }) {
               ))}
             </div>
             <div style={{ padding: 16, flex: 1, overflowY: "auto" }}>
+              {field("Alias (optional)", <Input value={alias} onChange={(event) => setAlias(event.target.value)} placeholder={selected.serverName} />)}
+              {field("Colour profile", (
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  {data.profiles.map((profile) => (
+                    <button key={profile.id} type="button" onClick={() => setProfileId(profile.id)} title={profile.name}
+                      style={{ width: 34, height: 24, borderRadius: "var(--radius-sm)", border: profileId === profile.id ? "2px solid var(--text-primary)" : "1px solid var(--border-default)", background: profile.profileBackground, color: profile.profileForeground, cursor: "pointer", fontSize: "var(--text-2xs)", fontWeight: 600 }}>
+                      Aa
+                    </button>
+                  ))}
+                </div>
+              ))}
               {tab === "properties" && (
                 <div>
                   {field("Server name", <Input defaultValue={selected.serverName} />)}
@@ -59,13 +71,6 @@ function ConnectDialog({ onConnect, onClose }) {
                   {selected.authType === "SqlAuth" && field("Login", <Input defaultValue={selected.username || ""} />)}
                   {selected.authType === "SqlAuth" && field("Password", <Input type="password" defaultValue="••••••••" />)}
                   {field("Database", <Input defaultValue={selected.database || "master"} />)}
-                  {field("Color", (
-                    <div style={{ display: "flex", gap: 10 }}>
-                      {["--conn-blue","--conn-green","--conn-amber","--conn-red","--conn-violet"].map((v) => (
-                        <span key={v} style={{ width: 22, height: 22, borderRadius: "var(--radius-full)", background: `var(${v})`, outline: selected.color === `var(${v})` ? "2px solid var(--text-primary)" : "none", outlineOffset: 2, cursor: "pointer" }} />
-                      ))}
-                    </div>
-                  ))}
                 </div>
               )}
               {tab === "connectionString" && (
@@ -74,14 +79,14 @@ function ConnectDialog({ onConnect, onClose }) {
                   <p style={{ fontSize: "var(--text-xs)", color: "var(--text-secondary)", lineHeight: 1.5 }}>Paste a full ADO.NET connection string. SSMSX parses server, database and encryption settings automatically.</p>
                 </div>
               )}
-              {tab === "custom" && (
-                <p style={{ fontSize: "var(--text-sm)", color: "var(--text-secondary)" }}>Advanced driver options (encrypt mode, trust server certificate, application name).</p>
-              )}
             </div>
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, padding: 12, borderTop: "1px solid var(--border-default)" }}>
               <Button variant="secondary" onClick={onClose}>Cancel</Button>
               <Button variant="ghost">Test</Button>
-              <Button variant="primary" onClick={() => onConnect(selected)}>Connect</Button>
+              <Button variant="primary" onClick={() => {
+                const profile = data.profiles.find((candidate) => candidate.id === profileId);
+                onConnect({ ...selected, alias: alias.trim() || undefined, profileId, profileBackground: profile.profileBackground, profileForeground: profile.profileForeground });
+              }}>Connect</Button>
             </div>
           </div>
         </div>

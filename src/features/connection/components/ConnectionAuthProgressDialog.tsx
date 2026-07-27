@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { useConnectionStore } from "../store/connectionStore";
+import { getEffectiveAlias } from "../../../shared/connectionAppearance";
 
 export function ConnectionAuthProgressDialog() {
   const dialogRef = useRef<HTMLDialogElement>(null);
@@ -13,7 +14,7 @@ export function ConnectionAuthProgressDialog() {
 
   const isOpen = loading && !!activeOperation && !!activeRequestId;
   const isEntra = target?.authType === "EntraMfa";
-  const targetName = target?.name || target?.serverName || "selected server";
+  const targetName = target ? getEffectiveAlias(target) : "selected server";
   const operationLabel =
     activeOperation === "test" ? "Testing connection" : "Connecting";
 

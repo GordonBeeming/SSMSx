@@ -3,6 +3,9 @@ import { explorerDatabases } from "../../explorer/api/explorerApi";
 import { useConnectionStore } from "../../connection";
 import { useQueryStore } from "../store/queryStore";
 import type { DatabaseInfo } from "../../explorer/types";
+import { getEffectiveAlias, resolveColorProfile } from "../../../shared/connectionAppearance";
+import { useSettingsStore } from "../../settings";
+import { ColorProfileMarker } from "../../../shared/components/ColorProfileMarker";
 
 interface QueryTargetBarProps {
   tabId: string;
@@ -15,6 +18,7 @@ export function QueryTargetBar({ tabId }: QueryTargetBarProps) {
   const activeConnectionIds = useConnectionStore((s) => s.activeConnectionIds);
   const connect = useConnectionStore((s) => s.connect);
   const cancelConnectionAttempt = useConnectionStore((s) => s.cancelConnectionAttempt);
+  const customProfiles = useSettingsStore((s) => s.settings.connections.colorProfiles);
   const [databases, setDatabases] = useState<DatabaseInfo[]>([]);
   const [databaseLoading, setDatabaseLoading] = useState(false);
   const [databaseError, setDatabaseError] = useState<string | null>(null);
@@ -72,7 +76,7 @@ export function QueryTargetBar({ tabId }: QueryTargetBarProps) {
         (!detail?.connectionId || detail.connectionId === tab.connectionId) &&
         !useConnectionStore.getState().activeConnectionIds.includes(tab.connectionId)
       ) {
-        updateTab(tab.id, { connectionId: null, connectionColor: undefined });
+        updateTab(tab.id, { connectionId: null });
       }
     };
 
@@ -91,21 +95,17 @@ export function QueryTargetBar({ tabId }: QueryTargetBarProps) {
       }
 
       if (!connectionId) {
-        updateTab(tab.id, { connectionId: null, connectionColor: undefined });
+        updateTab(tab.id, { connectionId: null });
         return;
       }
 
       const nextConnection = connections.find((c) => c.id === connectionId);
-      updateTab(tab.id, {
-        connectionId,
-        database: nextConnection?.database || tab.database || "master",
-        connectionColor: nextConnection?.color,
-      });
+      updateTab(tab.id, { connectionId, database: nextConnection?.database || tab.database || "master" });
 
       if (!activeConnectionIds.includes(connectionId)) {
         await connect(connectionId);
         if (!useConnectionStore.getState().activeConnectionIds.includes(connectionId)) {
-          updateTab(tab.id, { connectionId: null, connectionColor: undefined });
+          updateTab(tab.id, { connectionId: null });
         }
       }
     },
@@ -129,7 +129,7 @@ export function QueryTargetBar({ tabId }: QueryTargetBarProps) {
         <option value="">No connection</option>
         {connections.map((item) => (
           <option key={item.id} value={item.id}>
-            {item.name || item.serverName}
+            {getEffectiveAlias(item)}
           </option>
         ))}
       </select>
@@ -149,11 +149,14 @@ export function QueryTargetBar({ tabId }: QueryTargetBarProps) {
         ))}
       </select>
 
-      {connection?.color && (
-        <span
-          className="h-2 w-2 rounded-full"
-          style={{ backgroundColor: connection.color }}
-          aria-hidden="true"
+      {connection && (
+        <ColorProfileMarker
+          profile={resolveColorProfile(
+            connection.colorProfileId,
+            customProfiles,
+            connection.color
+          )}
+          size="xs"
         />
       )}
       <span className={isConnected ? "text-success" : "text-text-secondary"}>

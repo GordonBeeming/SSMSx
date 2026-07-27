@@ -24,3 +24,6 @@ tokio = { version = "1.50.0", features = ["full"] }
 uuid = { version = "1.22.0", features = ["v4"] }
 log = "0.4.29"
 env_logger = "0.11.9"
+
+[target.'cfg(any(target_os = "macos", windows, target_os = "linux"))'.dependencies]
+tauri-plugin-single-instance = "2.4.3"

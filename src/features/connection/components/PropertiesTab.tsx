@@ -6,6 +6,8 @@ import {
   CONNECTION_CANCELLED_MESSAGE,
   isConnectionCancellation,
 } from "../utils/connectionResult";
+import { AppearanceFields } from "./AppearanceFields";
+import { shouldSaveConnectionChange } from "../../../shared/connectionAppearance";
 
 const DEFAULT_CONNECTION: Omit<ConnectionInfo, "id" | "createdAt"> = {
   name: "",
@@ -30,6 +32,8 @@ export function PropertiesTab() {
     connect,
     cancelConnectionAttempt,
     setFormDirty,
+    appearanceDraft,
+    formDirty,
   } = useConnectionStore();
 
   const [form, setForm] = useState(DEFAULT_CONNECTION);
@@ -45,25 +49,26 @@ export function PropertiesTab() {
     isConnectionCancellation(testResult.error);
 
   useEffect(() => {
-    if (selectedConnection) {
+    const selected = useConnectionStore.getState().selectedConnection;
+    if (selected) {
       setForm({
-        name: selectedConnection.name || "",
-        serverName: selectedConnection.serverName,
-        authType: selectedConnection.authType,
-        username: selectedConnection.username || "",
-        database: selectedConnection.database || "",
-        encrypt: selectedConnection.encrypt,
-        trustServerCertificate: selectedConnection.trustServerCertificate,
-        connectionString: selectedConnection.connectionString,
-        color: selectedConnection.color,
-        credentialRef: selectedConnection.credentialRef,
+        name: selected.name || "",
+        serverName: selected.serverName,
+        authType: selected.authType,
+        username: selected.username || "",
+        database: selected.database || "",
+        encrypt: selected.encrypt,
+        trustServerCertificate: selected.trustServerCertificate,
+        connectionString: selected.connectionString,
+        color: selected.color,
+        credentialRef: selected.credentialRef,
       });
     } else {
       setForm(DEFAULT_CONNECTION);
     }
     setPassword("");
     setIsDirtyIdentity(false);
-  }, [selectedConnection, selectionVersion]);
+  }, [selectionVersion]);
 
   // Fields that make this a new connection when changed
   const identityFields = new Set(["serverName", "username", "authType"]);
@@ -101,6 +106,8 @@ export function PropertiesTab() {
 
   const buildConnectionInfo = (): ConnectionInfo => ({
     ...form,
+    name: appearanceDraft.name,
+    colorProfileId: appearanceDraft.colorProfileId,
     id: isNewConnection ? crypto.randomUUID() : selectedConnection.id,
     createdAt: isNewConnection ? new Date().toISOString() : selectedConnection.createdAt,
     lastUsed: isNewConnection ? undefined : selectedConnection.lastUsed,
@@ -121,7 +128,7 @@ export function PropertiesTab() {
 
     // Save if it's a new connection, identity changed, or password updated
     const hasNewPassword = !!password;
-    const needsSave = isNewConnection || hasNewPassword || !rememberPassword;
+    const needsSave = shouldSaveConnectionChange({ isNewConnection, formDirty, hasNewPassword, rememberPassword });
     let connectionId = info.id;
     if (needsSave) {
       const wantsClear = !rememberPassword && !!selectedConnection?.credentialRef;
@@ -159,6 +166,7 @@ export function PropertiesTab() {
     <div className="flex h-full flex-col">
     <div className="flex-1 overflow-y-auto">
     <div className="flex flex-col gap-3">
+      <AppearanceFields />
       {/* Server Name */}
       <div>
         <label className="mb-1 block text-xs text-text-secondary">

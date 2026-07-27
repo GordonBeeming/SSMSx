@@ -4,11 +4,13 @@ namespace Ssmsx.Protocol.Models;
 
 public record ConnectionInfo
 {
+    private string? _colorProfileId;
+
     [JsonPropertyName("id")]
     public string Id { get; init; } = Guid.NewGuid().ToString();
 
     [JsonPropertyName("name")]
-    public string Name { get; init; } = string.Empty;
+    public string? Name { get; init; }
 
     [JsonPropertyName("serverName")]
     public required string ServerName { get; init; }
@@ -36,6 +38,16 @@ public record ConnectionInfo
 
     [JsonPropertyName("color")]
     public string? Color { get; init; }
+
+    [JsonPropertyName("colorProfileId")]
+    public string ColorProfileId
+    {
+        get => string.IsNullOrWhiteSpace(_colorProfileId) ? "red" : _colorProfileId;
+        init => _colorProfileId = value;
+    }
+
+    [JsonIgnore]
+    public bool HasExplicitColorProfileId => !string.IsNullOrWhiteSpace(_colorProfileId);
 
     [JsonPropertyName("lastUsed")]
     public DateTime? LastUsed { get; init; }

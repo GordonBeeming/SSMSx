@@ -6,7 +6,7 @@ user-invocable: true
 
 Read the `readme.md` file within this skill, and explore the other available files (`tokens/`, `components/`, `ui_kits/`, `assets/`, `guidelines/`).
 
-SSMSx is a light-themed, information-dense desktop SQL Server client (Tauri + React + C# sidecar). The look is utilitarian: layered cool grays, one blue accent (`#0063B2`), 1px borders instead of shadows, native OS fonts, a tight 4px grid, and per-connection color dots. No gradients, no imagery, minimal motion, no emoji.
+SSMSx is a light-themed, information-dense desktop SQL Server client (Tauri + React + C# sidecar). The look is utilitarian: layered cool grays, one blue accent (`#0063B2`), 1px borders instead of shadows, native OS fonts, a tight 4px grid, and required per-connection colour profiles. Each profile is a background/foreground pair: active connection surfaces use the full pair while inactive surfaces retain the foreground marker. No gradients, no imagery, minimal motion, no emoji.
 
 If creating visual artifacts (slides, mocks, throwaway prototypes, etc), copy assets out and create static HTML files for the user to view. Link `styles.css` for tokens and reference components via `window.SSMSxDesignSystem_453330` after loading `_ds_bundle.js`. The Object Explorer `NodeIcon` set is the brand's signature iconography — reuse it, don't redraw it.
 

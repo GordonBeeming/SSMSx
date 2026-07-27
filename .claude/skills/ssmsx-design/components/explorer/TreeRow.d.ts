@@ -16,8 +16,8 @@ export interface TreeRowProps {
   loading?: boolean;
   /** Selected state — accent tint. @default false */
   selected?: boolean;
-  /** Connection color dot (server rows only). */
-  color?: string;
+  /** Connection-profile foreground marker (server rows only). */
+  profileForeground?: string;
   onToggle?: () => void;
   onSelect?: () => void;
   style?: React.CSSProperties;

@@ -36,7 +36,7 @@ export interface QueryTab {
   diagramViewId?: string;
   initialSql?: string;
   title: string;
-  connectionColor?: string;
+  pinned?: boolean;
 }
 
 /** Payload shape from the sidecar streaming batches (with requestId injected by Rust) */

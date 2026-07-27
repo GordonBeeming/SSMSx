@@ -132,6 +132,22 @@ async function setConnectionString() {
   }
 }
 
+async function assertConnectionAppearanceControls() {
+  const result = await js(`(() => {
+    const alias = document.querySelector("input#connection-alias");
+    const combobox = document.querySelector("[data-testid='color-profile-combobox'] [role='combobox']");
+    if (!alias || !combobox) return { ok: false, alias: Boolean(alias), combobox: Boolean(combobox) };
+    combobox.click();
+    const options = [...document.querySelectorAll("[data-testid='color-profile-combobox'] [role='option']")];
+    const blue = options.find((option) => option.textContent.includes("Blue"));
+    const style = blue ? getComputedStyle(blue) : null;
+    const semantic = combobox.getAttribute("aria-controls") && combobox.getAttribute("aria-expanded") === "true";
+    return { ok: Boolean(blue && semantic && style?.backgroundColor !== "rgba(0, 0, 0, 0)" && style?.color !== "rgb(0, 0, 0)"), optionCount: options.length, semantic, background: style?.backgroundColor, foreground: style?.color };
+  })()`);
+  if (!result.ok) throw new Error(`Connection appearance controls did not render expected semantics/styles: ${JSON.stringify(result)}`);
+  await js(`(() => { document.querySelector("[data-testid='color-profile-combobox'] [role='combobox']")?.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })); return { ok: true }; })()`);
+}
+
 async function setEditorValue(sql, lineNumber = 1) {
   const result = await js(`(() => {
     const editors = window.monaco?.editor?.getEditors?.() ?? [];
@@ -254,6 +270,7 @@ async function connectThroughUi() {
     const text = await bodyText();
     return { ok: text.text.includes("Connect to Server"), value: text.text };
   });
+  await assertConnectionAppearanceControls();
   await clickVisibleButton("Connection String", "dialog[open] button");
   await setConnectionString();
   await clickVisibleButton("Connect", "dialog[open] button");

@@ -51,13 +51,13 @@
   /* soft status fills (e.g. error bar bg = error/10) */
   --status-error-soft: color-mix(in srgb, var(--red-600) 10%, transparent);
 
-  /* ---- Connection color-coding swatches ----
-     Users tag each saved connection with a color (a dot shown in the toolbar,
-     tabs, status bar and tree). These are sensible defaults. */
-  --conn-blue:   #0063B2;
-  --conn-green:  #16a34a;
-  --conn-amber:  #d97706;
-  --conn-red:    #dc2626;
-  --conn-violet: #7c3aed;
-  --conn-slate:  #555555;
+  /* ---- Connection profiles ----
+     Active connection surfaces use the complete background/foreground pair;
+     inactive chrome uses only the foreground dot, rail, or border. */
+  --conn-red-bg: #FEF2F2; --conn-red-fg: #991B1B;
+  --conn-blue-bg: #EFF6FF; --conn-blue-fg: #1D4ED8;
+  --conn-green-bg: #F0FDF4; --conn-green-fg: #166534;
+  --conn-amber-bg: #FFFBEB; --conn-amber-fg: #92400E;
+  --conn-violet-bg: #F5F3FF; --conn-violet-fg: #6D28D9;
+  --conn-slate-bg: #F8FAFC; --conn-slate-fg: #334155;
 }

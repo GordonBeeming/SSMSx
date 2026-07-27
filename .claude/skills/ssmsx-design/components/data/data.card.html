@@ -35,9 +35,9 @@
         <div className="row" style={{ alignItems: "flex-start" }}>
           <span className="lbl">Rows</span>
           <div className="list">
-            <ConnectionItem name="Prod — Reporting" serverName="sql-prod-01.db" database="Sales" username="reader" authType="EntraMfa" color="var(--conn-red)" />
-            <ConnectionItem name="Local Dev" serverName="localhost,1433" database="Northwind" username="sa" authType="SqlAuth" color="var(--conn-green)" selected />
-            <ConnectionItem serverName="staging.internal" database="App" authType="ConnectionString" color="var(--conn-amber)" />
+            <ConnectionItem alias="Prod — Reporting" serverName="sql-prod-01.db" database="Sales" username="reader" authType="EntraMfa" profileBackground="var(--conn-red-bg)" profileForeground="var(--conn-red-fg)" />
+            <ConnectionItem alias="Local Dev" serverName="localhost,1433" database="Northwind" username="sa" authType="SqlAuth" profileBackground="var(--conn-green-bg)" profileForeground="var(--conn-green-fg)" selected />
+            <ConnectionItem serverName="staging.internal" database="App" authType="ConnectionString" profileBackground="var(--conn-amber-bg)" profileForeground="var(--conn-amber-fg)" />
           </div>
         </div>
       </div>

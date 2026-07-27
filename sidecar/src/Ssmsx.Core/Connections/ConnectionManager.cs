@@ -9,7 +9,12 @@ namespace Ssmsx.Core.Connections;
 public class ConnectionManager
 {
     private readonly ConcurrentDictionary<string, SqlConnection> _connections = new();
-    private readonly SqlConnectionFactory _factory = new();
+    private readonly SqlConnectionFactory _factory;
+
+    public ConnectionManager(SqlConnectionFactory? factory = null)
+    {
+        _factory = factory ?? new SqlConnectionFactory();
+    }
 
     public async Task<string> ConnectAsync(
         string connectionId,
@@ -21,17 +26,32 @@ public class ConnectionManager
             ?? throw new InvalidOperationException($"Connection '{connectionId}' not found");
 
         var connection = await _factory.CreateAsync(info, credentialStore, ct: ct);
+        try
+        {
+            ct.ThrowIfCancellationRequested();
 
-        // Dispose any existing connection with same ID
-        if (_connections.TryRemove(connectionId, out var existing))
-            await existing.DisposeAsync();
+            // Patch only activity metadata so appearance or identity edits made while
+            // the network connection was opening are not overwritten by this snapshot.
+            // A missing row means deletion won the race; never publish that open handle.
+            if (!await store.UpdateLastUsedAsync(connectionId, DateTime.UtcNow))
+                throw new InvalidOperationException(
+                    $"Connection '{connectionId}' was deleted while it was opening");
 
-        _connections[connectionId] = connection;
+            ct.ThrowIfCancellationRequested();
 
-        // Update LastUsed
-        await store.SaveAsync(info with { LastUsed = DateTime.UtcNow });
+            // Dispose any existing connection with same ID only after the new
+            // connection has passed cancellation and persistence checks.
+            if (_connections.TryRemove(connectionId, out var existing))
+                await existing.DisposeAsync();
 
-        return connectionId;
+            _connections[connectionId] = connection;
+            return connectionId;
+        }
+        catch
+        {
+            await connection.DisposeAsync();
+            throw;
+        }
     }
 
     public async Task DisconnectAsync(string connectionId)

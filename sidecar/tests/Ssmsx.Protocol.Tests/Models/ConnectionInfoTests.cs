@@ -23,6 +23,7 @@ public class ConnectionInfoTests
             TrustServerCertificate = true,
             ConnectionString = "Server=sql.example.com;",
             Color = "#00FF00",
+            ColorProfileId = "custom-night",
             LastUsed = new DateTime(2026, 3, 15, 12, 0, 0, DateTimeKind.Utc),
             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc)
         };
@@ -42,6 +43,7 @@ public class ConnectionInfoTests
         Assert.Equal(original.TrustServerCertificate, deserialized.TrustServerCertificate);
         Assert.Equal(original.ConnectionString, deserialized.ConnectionString);
         Assert.Equal(original.Color, deserialized.Color);
+        Assert.Equal(original.ColorProfileId, deserialized.ColorProfileId);
         Assert.Equal(original.LastUsed, deserialized.LastUsed);
         Assert.Equal(original.CreatedAt, deserialized.CreatedAt);
     }
@@ -116,7 +118,7 @@ public class ConnectionInfoTests
 
         Assert.False(string.IsNullOrEmpty(connection.Id));
         Assert.True(Guid.TryParse(connection.Id, out _));
-        Assert.Equal(string.Empty, connection.Name);
+        Assert.Null(connection.Name);
         Assert.Equal(AuthType.SqlAuth, connection.AuthType);
         Assert.Equal(EncryptMode.Mandatory, connection.Encrypt);
         Assert.False(connection.TrustServerCertificate);
@@ -125,6 +127,8 @@ public class ConnectionInfoTests
         Assert.Null(connection.Database);
         Assert.Null(connection.ConnectionString);
         Assert.Null(connection.Color);
+        Assert.Equal("red", connection.ColorProfileId);
+        Assert.False(connection.HasExplicitColorProfileId);
         Assert.Null(connection.LastUsed);
         Assert.True(connection.CreatedAt > DateTime.MinValue);
     }
@@ -140,10 +144,44 @@ public class ConnectionInfoTests
         var json = JsonSerializer.Serialize(connection, ProtocolJsonContext.Default.ConnectionInfo);
 
         Assert.DoesNotContain("\"username\"", json);
+        Assert.DoesNotContain("\"name\"", json);
         Assert.DoesNotContain("\"credentialRef\"", json);
         Assert.DoesNotContain("\"database\"", json);
         Assert.DoesNotContain("\"connectionString\"", json);
         Assert.DoesNotContain("\"color\"", json);
         Assert.DoesNotContain("\"lastUsed\"", json);
+        Assert.Contains("\"colorProfileId\":\"red\"", json);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void ColorProfileId_BlankOrMissing_UsesRedDefault(string? colorProfileId)
+    {
+        var connection = colorProfileId is null
+            ? new ConnectionInfo { ServerName = "localhost" }
+            : new ConnectionInfo { ServerName = "localhost", ColorProfileId = colorProfileId };
+
+        Assert.Equal("red", connection.ColorProfileId);
+        Assert.False(connection.HasExplicitColorProfileId);
+    }
+
+    [Fact]
+    public void Serialization_RoundTrip_PreservesNullOptionalName()
+    {
+        var original = new ConnectionInfo
+        {
+            ServerName = "localhost",
+            Name = null,
+            ColorProfileId = "blue"
+        };
+
+        var json = JsonSerializer.Serialize(original, ProtocolJsonContext.Default.ConnectionInfo);
+        var deserialized = JsonSerializer.Deserialize(json, ProtocolJsonContext.Default.ConnectionInfo);
+
+        Assert.NotNull(deserialized);
+        Assert.Null(deserialized.Name);
+        Assert.Equal("blue", deserialized.ColorProfileId);
     }
 }

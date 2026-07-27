@@ -14,6 +14,7 @@ import {
   explorerUsers,
 } from "../api/explorerApi";
 import { loadSavedDiagramViews } from "../../diagram/utils/savedDiagrams";
+import { getEffectiveAlias } from "../../../shared/connectionAppearance";
 
 interface ExplorerState {
   nodes: Record<string, ExplorerNode>;
@@ -46,7 +47,7 @@ export const useExplorerStore = create<ExplorerState>((set, get) => ({
         id: nodeId,
         connectionId,
         type: "server",
-        name: connection.name || connection.serverName,
+        name: getEffectiveAlias(connection),
         expanded: false,
         loading: false,
         loaded: false,
