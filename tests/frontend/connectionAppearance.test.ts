@@ -24,6 +24,7 @@ test("profiles resolve built-ins, custom entries, and missing IDs", () => {
   assert.equal(resolveColorProfile("blue").name, "Blue");
   assert.equal(resolveColorProfile("customer", [custom]).name, "Customer");
   assert.equal(resolveColorProfile("gone", [custom]).id, "red");
+  assert.equal(resolveColorProfile("  customer  ", [custom]).name, "Customer");
   assert.equal(BUILT_IN_COLOR_PROFILES[0].id, "red");
 });
 

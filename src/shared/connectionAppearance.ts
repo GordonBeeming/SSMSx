@@ -73,7 +73,7 @@ export function normalizeCustomColorProfiles(value: unknown): CustomColorProfile
 }
 
 export function normalizeColorProfileId(profileId: unknown, legacyColor?: unknown): string {
-  if (typeof profileId === "string" && profileId.trim()) return profileId;
+  if (typeof profileId === "string" && profileId.trim()) return profileId.trim();
   if (typeof legacyColor === "string") return LEGACY_FOREGROUND_IDS[legacyColor.toLowerCase()] ?? RED_COLOR_PROFILE_ID;
   return RED_COLOR_PROFILE_ID;
 }

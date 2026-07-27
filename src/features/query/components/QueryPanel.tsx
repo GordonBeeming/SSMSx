@@ -37,6 +37,9 @@ export function QueryPanel() {
   const activeTab = tabs.find((t) => t.id === activeTabId);
   const activeSql = activeTabId ? tabSql[activeTabId] ?? "" : "";
   const activeResult = activeTabId ? results[activeTabId] : undefined;
+  const activeConnection = activeTab?.connectionId
+    ? connections.find((connection) => connection.id === activeTab.connectionId)
+    : undefined;
   const splitContainerRef = useRef<HTMLDivElement>(null);
   const [resultsHeightPercent, setResultsHeightPercent] = useState(
     DEFAULT_RESULTS_HEIGHT_PERCENT
@@ -199,7 +202,16 @@ export function QueryPanel() {
               className="flex min-h-[120px] flex-col overflow-hidden"
               style={{ flex: `0 0 ${resultsHeightPercent}%` }}
             >
-              <QueryResultsTable result={activeResult} profile={activeTab.connectionId ? resolveColorProfile(connections.find((connection) => connection.id === activeTab.connectionId)?.colorProfileId, customProfiles, connections.find((connection) => connection.id === activeTab.connectionId)?.color) : null} />
+              <QueryResultsTable
+                result={activeResult}
+                profile={activeConnection
+                  ? resolveColorProfile(
+                      activeConnection.colorProfileId,
+                      customProfiles,
+                      activeConnection.color
+                    )
+                  : null}
+              />
             </div>
           </>
         )}
