@@ -112,6 +112,7 @@ export function QueryResultsTable({ result, profile }: QueryResultsTableProps) {
   const [copyStatus, setCopyStatus] = useState<string | null>(null);
   const [columnSizing, setColumnSizing] = useState<ColumnSizing | null>(null);
   const gridRef = useRef<HTMLDivElement>(null);
+  const resizeCleanupRef = useRef<(() => void) | null>(null);
   // Read inside the per-cell onMouseEnter handler; a ref avoids re-subscribing
   // every cell on each drag-state change.
   const isDraggingRef = useRef(false);
@@ -160,6 +161,7 @@ export function QueryResultsTable({ result, profile }: QueryResultsTableProps) {
     (event: ReactPointerEvent<HTMLDivElement>, columnIndex: number) => {
       event.preventDefault();
       event.stopPropagation();
+      resizeCleanupRef.current?.();
       const startX = event.clientX;
       const startWidth = columnWidths[columnIndex] ?? 0;
       const startingWidths = [...columnWidths];
@@ -175,14 +177,20 @@ export function QueryResultsTable({ result, profile }: QueryResultsTableProps) {
         document.removeEventListener("pointermove", onPointerMove);
         document.removeEventListener("pointerup", stop);
         document.removeEventListener("pointercancel", stop);
+        if (resizeCleanupRef.current === stop) {
+          resizeCleanupRef.current = null;
+        }
       };
 
+      resizeCleanupRef.current = stop;
       document.addEventListener("pointermove", onPointerMove);
       document.addEventListener("pointerup", stop);
       document.addEventListener("pointercancel", stop);
     },
     [columnSizingKey, columnWidths]
   );
+
+  useEffect(() => () => resizeCleanupRef.current?.(), []);
 
   const resizeColumnWithKeyboard = useCallback(
     (event: ReactKeyboardEvent<HTMLDivElement>, columnIndex: number) => {

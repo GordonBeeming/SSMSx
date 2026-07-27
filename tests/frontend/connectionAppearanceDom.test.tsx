@@ -283,6 +283,23 @@ describe("ColorProfileCombobox", () => {
 });
 
 describe("ConnectionProfilesPanel", () => {
+  it("rejects duplicate and built-in custom profile IDs before persisting", () => {
+    const saveColorProfiles = useSettingsStore.getState().saveColorProfiles;
+
+    expect(saveColorProfiles([{ ...customProfile, id: "red" }])).toBe(
+      "Profile IDs must be unique and cannot use a built-in ID."
+    );
+    expect(
+      saveColorProfiles([
+        customProfile,
+        { ...customProfile, name: "Night two" },
+      ])
+    ).toBe("Profile IDs must be unique and cannot use a built-in ID.");
+    expect(useSettingsStore.getState().settings.connections.colorProfiles).toEqual(
+      []
+    );
+  });
+
   it("associates validation errors and restores focus after saving", async () => {
     const user = userEvent.setup();
     render(<ConnectionProfilesPanel />);

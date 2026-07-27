@@ -95,7 +95,7 @@ export function QueryTabBar() {
       <div
         key={tab.id}
         className={`group flex max-w-[200px] flex-none items-center gap-1.5 border-r border-bg-tertiary px-3 py-1.5 text-xs ${isActive ? profile ? "text-text-primary" : "bg-bg-primary text-text-primary" : "text-text-secondary hover:bg-bg-tertiary"}`}
-        style={isActive && profile ? { backgroundColor: profile.background, color: profile.foreground, borderBottomColor: profile.foreground, borderBottomWidth: 2 } : undefined}
+        style={isActive && profile ? { backgroundColor: profile.background, color: profile.foreground, borderBottomColor: profile.foreground, borderBottomStyle: "solid", borderBottomWidth: 2 } : undefined}
         onContextMenu={(event) => handleContextMenu(event, tab.id)}
         onMouseDown={handleMiddleMouseDown}
         onAuxClick={(event) => handleAuxClick(event, tab.id)}

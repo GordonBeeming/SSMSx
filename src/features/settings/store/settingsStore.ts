@@ -2,6 +2,7 @@ import { create } from "zustand";
 import type { AppSettings, CustomColorProfile } from "../types";
 import { defaultSettings } from "../settingsSchema";
 import {
+  BUILT_IN_COLOR_PROFILES,
   normalizeCustomColorProfiles,
   validateCustomColorProfile,
 } from "../../../shared/connectionAppearance";
@@ -102,6 +103,12 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   saveColorProfiles: (profiles) => {
     const normalized: CustomColorProfile[] = [];
     for (const profile of profiles) {
+      if (
+        BUILT_IN_COLOR_PROFILES.some((builtIn) => builtIn.id === profile.id) ||
+        normalized.some((existing) => existing.id === profile.id)
+      ) {
+        return "Profile IDs must be unique and cannot use a built-in ID.";
+      }
       const error = validateCustomColorProfile(profile, normalized, profile.id);
       if (error) return error;
       normalized.push({

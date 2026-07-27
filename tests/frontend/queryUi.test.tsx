@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { QueryResultsTable } from "../../src/features/query/components/QueryResultsTable";
 import { QueryTabBar } from "../../src/features/query/components/QueryTabBar";
 import { useQueryStore } from "../../src/features/query/store/queryStore";
@@ -132,6 +132,9 @@ describe("query tab session and profile markers", () => {
         "rgb(255, 255, 255)"
       );
     }
+    expect(
+      screen.getByTitle("app — Query 2").parentElement?.style.borderBottomStyle
+    ).toBe("solid");
   });
 });
 
@@ -205,5 +208,21 @@ describe("query results layout and resizing", () => {
     fireEvent.keyDown(separator, { key: "ArrowRight" });
     expect(column?.style.width).toBe("500px");
     expect(separator.getAttribute("aria-valuenow")).toBe("500");
+  });
+
+  it("cleans up a pointer resize when the result table unmounts", () => {
+    const removeEventListener = vi.spyOn(document, "removeEventListener");
+    const view = render(<QueryResultsTable result={result} profile={nightProfile} />);
+    fireEvent.pointerDown(
+      screen.getByRole("separator", { name: "Resize Payload column" }),
+      { clientX: 200 }
+    );
+
+    view.unmount();
+
+    expect(removeEventListener).toHaveBeenCalledWith(
+      "pointermove",
+      expect.any(Function)
+    );
   });
 });
