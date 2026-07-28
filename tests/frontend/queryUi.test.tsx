@@ -63,7 +63,7 @@ function resetStores() {
 beforeEach(resetStores);
 afterEach(cleanup);
 
-describe("query tab session and profile markers", () => {
+describe("query tab session and profile colours", () => {
   it("round-trips pinned tabs, ordering, SQL, and the active tab through localStorage", () => {
     useQueryStore.setState({
       tabs,
@@ -121,16 +121,11 @@ describe("query tab session and profile markers", () => {
       "flex-wrap"
     );
 
-    const markers = view.container.querySelectorAll("[data-profile-marker]");
-    expect(markers).toHaveLength(2);
-    for (const marker of markers) {
-      expect((marker as HTMLElement).style.backgroundColor).toBe("rgb(0, 0, 0)");
-      expect((marker as HTMLElement).style.borderColor).toBe(
-        "rgb(255, 255, 255)"
-      );
-      expect((marker.firstElementChild as HTMLElement).style.backgroundColor).toBe(
-        "rgb(255, 255, 255)"
-      );
+    expect(view.container.querySelectorAll("[data-profile-marker]")).toHaveLength(0);
+    for (const title of ["master — Query 1", "app — Query 2"]) {
+      const tab = screen.getByTitle(title).parentElement as HTMLElement;
+      expect(tab.style.backgroundColor).toBe("rgb(0, 0, 0)");
+      expect(tab.style.color).toBe("rgb(255, 255, 255)");
     }
     expect(
       screen.getByTitle("app — Query 2").parentElement?.style.borderBottomStyle
@@ -156,7 +151,7 @@ describe("query results layout and resizing", () => {
     totalRows: 1,
   };
 
-  it("wraps result tabs, renders two-colour markers, and caps long columns at 500px", () => {
+  it("wraps fully coloured result tabs and caps long columns at 500px", () => {
     const view = render(
       <QueryResultsTable result={result} profile={nightProfile} tabId="query" />
     );
@@ -167,9 +162,12 @@ describe("query results layout and resizing", () => {
     expect(screen.getByLabelText("Query result tabs").className).toContain(
       "flex-wrap"
     );
-    expect(view.container.querySelectorAll("[data-profile-marker]")).toHaveLength(
-      2
-    );
+    expect(view.container.querySelectorAll("[data-profile-marker]")).toHaveLength(0);
+    for (const name of ["Results (1)", "Messages (1)"]) {
+      const tab = screen.getByRole("button", { name });
+      expect(tab.style.backgroundColor).toBe("rgb(0, 0, 0)");
+      expect(tab.style.color).toBe("rgb(255, 255, 255)");
+    }
     expect(view.container.querySelector("col")?.style.width).toBe("500px");
     expect(screen.getByRole("columnheader").className).toContain(
       "max-w-[500px]"

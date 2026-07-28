@@ -3,9 +3,7 @@ import { explorerDatabases } from "../../explorer/api/explorerApi";
 import { useConnectionStore } from "../../connection";
 import { useQueryStore } from "../store/queryStore";
 import type { DatabaseInfo } from "../../explorer/types";
-import { getEffectiveAlias, resolveColorProfile } from "../../../shared/connectionAppearance";
-import { useSettingsStore } from "../../settings";
-import { ColorProfileMarker } from "../../../shared/components/ColorProfileMarker";
+import { getEffectiveAlias } from "../../../shared/connectionAppearance";
 
 interface QueryTargetBarProps {
   tabId: string;
@@ -18,14 +16,10 @@ export function QueryTargetBar({ tabId }: QueryTargetBarProps) {
   const activeConnectionIds = useConnectionStore((s) => s.activeConnectionIds);
   const connect = useConnectionStore((s) => s.connect);
   const cancelConnectionAttempt = useConnectionStore((s) => s.cancelConnectionAttempt);
-  const customProfiles = useSettingsStore((s) => s.settings.connections.colorProfiles);
   const [databases, setDatabases] = useState<DatabaseInfo[]>([]);
   const [databaseLoading, setDatabaseLoading] = useState(false);
   const [databaseError, setDatabaseError] = useState<string | null>(null);
 
-  const connection = tab?.connectionId
-    ? connections.find((c) => c.id === tab.connectionId)
-    : null;
   const isConnected =
     !!tab?.connectionId && activeConnectionIds.includes(tab.connectionId);
   const databaseOptions = databases.some((db) => db.name === tab?.database)
@@ -149,16 +143,6 @@ export function QueryTargetBar({ tabId }: QueryTargetBarProps) {
         ))}
       </select>
 
-      {connection && (
-        <ColorProfileMarker
-          profile={resolveColorProfile(
-            connection.colorProfileId,
-            customProfiles,
-            connection.color
-          )}
-          size="xs"
-        />
-      )}
       <span className={isConnected ? "text-success" : "text-text-secondary"}>
         {isConnected ? "Connected" : "Disconnected"}
       </span>
