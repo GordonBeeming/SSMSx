@@ -497,7 +497,7 @@ export function QueryResultsTable({ result, profile, tabId }: QueryResultsTableP
                   setActiveTab("results");
                   setActiveResultSetIndex(index);
                 }}
-                className={`inline-flex items-center px-3 py-1 ${activeTab === "results" && activeResultSetIndex === index ? "border-b-2 border-accent text-text-primary" : "text-text-secondary hover:text-text-primary"}`}
+                className={`inline-flex items-center px-3 py-1 ${activeTab === "results" && activeResultSetIndex === index ? "border-b-2 border-accent text-text-primary" : profile ? "" : "text-text-secondary hover:text-text-primary"}`}
                 style={profile ? {
                   backgroundColor: profile.background,
                   color: profile.foreground,
@@ -515,7 +515,7 @@ export function QueryResultsTable({ result, profile, tabId }: QueryResultsTableP
             <button
               type="button"
               onClick={() => setActiveTab("messages")}
-              className={`inline-flex items-center px-3 py-1 ${activeTab === "messages" ? "border-b-2 border-accent text-text-primary" : "text-text-secondary hover:text-text-primary"}`}
+              className={`inline-flex items-center px-3 py-1 ${activeTab === "messages" ? "border-b-2 border-accent text-text-primary" : profile ? "" : "text-text-secondary hover:text-text-primary"}`}
               style={profile ? {
                 backgroundColor: profile.background,
                 color: profile.foreground,
