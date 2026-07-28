@@ -19,7 +19,6 @@ import {
   clampResultColumnWidth,
   estimateResultColumnWidths,
 } from "../utils/resultColumnSizing";
-import { ColorProfileMarker } from "../../../shared/components/ColorProfileMarker";
 
 interface QueryResultsTableProps {
   result: QueryResult;
@@ -498,10 +497,15 @@ export function QueryResultsTable({ result, profile, tabId }: QueryResultsTableP
                   setActiveTab("results");
                   setActiveResultSetIndex(index);
                 }}
-                className={`inline-flex items-center gap-1.5 px-3 py-1 ${activeTab === "results" && activeResultSetIndex === index ? "border-b-2 border-accent text-text-primary" : "text-text-secondary hover:text-text-primary"}`}
-                style={activeTab === "results" && activeResultSetIndex === index && profile ? { backgroundColor: profile.background, color: profile.foreground, borderBottomColor: profile.foreground } : undefined}
+                className={`inline-flex items-center px-3 py-1 ${activeTab === "results" && activeResultSetIndex === index ? "border-b-2 border-accent text-text-primary" : profile ? "" : "text-text-secondary hover:text-text-primary"}`}
+                style={profile ? {
+                  backgroundColor: profile.background,
+                  color: profile.foreground,
+                  ...(activeTab === "results" && activeResultSetIndex === index
+                    ? { borderBottomColor: profile.foreground }
+                    : {}),
+                } : undefined}
               >
-                {profile && <ColorProfileMarker profile={profile} size="xs" />}
                 Results {visibleResultSets.length > 1 ? index + 1 : ""} (
                 {set.totalRows.toLocaleString()})
               </button>
@@ -511,10 +515,15 @@ export function QueryResultsTable({ result, profile, tabId }: QueryResultsTableP
             <button
               type="button"
               onClick={() => setActiveTab("messages")}
-              className={`inline-flex items-center gap-1.5 px-3 py-1 ${activeTab === "messages" ? "border-b-2 border-accent text-text-primary" : "text-text-secondary hover:text-text-primary"}`}
-              style={activeTab === "messages" && profile ? { backgroundColor: profile.background, color: profile.foreground, borderBottomColor: profile.foreground } : undefined}
+              className={`inline-flex items-center px-3 py-1 ${activeTab === "messages" ? "border-b-2 border-accent text-text-primary" : profile ? "" : "text-text-secondary hover:text-text-primary"}`}
+              style={profile ? {
+                backgroundColor: profile.background,
+                color: profile.foreground,
+                ...(activeTab === "messages"
+                  ? { borderBottomColor: profile.foreground }
+                  : {}),
+              } : undefined}
             >
-              {profile && <ColorProfileMarker profile={profile} size="xs" />}
               Messages ({result.messages.length})
             </button>
           )}

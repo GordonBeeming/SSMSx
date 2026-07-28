@@ -13,8 +13,7 @@ import { SettingsDialog, useSettingsStore } from "../features/settings";
 import { isTauriRuntime } from "../shared/utils/tauri";
 import { AboutDialog } from "./AboutDialog";
 import type { ConnectionInfo } from "../features/connection";
-import { getEffectiveAlias, resolveColorProfile } from "../shared/connectionAppearance";
-import { ColorProfileMarker } from "../shared/components/ColorProfileMarker";
+import { getEffectiveAlias } from "../shared/connectionAppearance";
 
 let tabCounter = 0;
 
@@ -54,7 +53,6 @@ function App() {
   const activeTab = tabs.find((t) => t.id === activeTabId);
   const [aboutOpen, setAboutOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const colorProfiles = useSettingsStore((state) => state.settings.connections.colorProfiles);
   const startupInitializedRef = useRef(false);
 
   const createNewTab = useCallback(() => {
@@ -388,9 +386,7 @@ function App() {
         {activeConnections.length > 0 && (
           <div className="flex items-center gap-3">
             {activeConnections.map((conn) => {
-              const profile = resolveColorProfile(conn.colorProfileId, colorProfiles, conn.color);
               return <div key={conn.id} className="flex items-center gap-1.5">
-                <ColorProfileMarker profile={profile} />
                 <span className="text-sm text-text-primary">
                   {getEffectiveAlias(conn)}
                 </span>

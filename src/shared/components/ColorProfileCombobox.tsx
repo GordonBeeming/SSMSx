@@ -1,6 +1,5 @@
 import { useEffect, useId, useRef, useState } from "react";
 import type { ColorProfile } from "../../features/settings/types";
-import { ColorProfileMarker } from "./ColorProfileMarker";
 
 interface ColorProfileComboboxProps {
   profiles: readonly ColorProfile[];
@@ -176,11 +175,8 @@ export function ColorProfileCombobox({
             : undefined
         }
       >
-        <span className="flex min-w-0 items-center gap-2">
-          {selected && (
-            <ColorProfileMarker profile={selected} size="md" />
-          )}
-          <span className="truncate">{selected?.name ?? "No profiles"}</span>
+        <span className="min-w-0 flex-1 truncate">
+          {selected?.name ?? "No profiles"}
         </span>
         <span aria-hidden="true">⌄</span>
       </button>
@@ -205,7 +201,7 @@ export function ColorProfileCombobox({
                 if (event.pointerType === "mouse") event.preventDefault();
               }}
               onClick={() => choose(index)}
-              className={`flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-left text-xs outline-none ${
+              className={`flex cursor-pointer items-center rounded px-2 py-1.5 text-left text-xs outline-none ${
                 index === activeIndex ? "ring-1 ring-accent-hover" : ""
               }`}
               style={{
@@ -213,7 +209,6 @@ export function ColorProfileCombobox({
                 color: profile.foreground,
               }}
             >
-              <ColorProfileMarker profile={profile} size="md" />
               <span className="flex-1">{profile.name}</span>
               <span aria-hidden="true">
                 {profile.id === value ? "✓" : ""}

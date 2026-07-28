@@ -7,7 +7,6 @@ import { useSettingsStore } from "../../settings";
 import { resolveColorProfile } from "../../../shared/connectionAppearance";
 import { partitionQueryTabs } from "../utils/queryTabs";
 import type { QueryTab } from "../types";
-import { ColorProfileMarker } from "../../../shared/components/ColorProfileMarker";
 
 const isMac = navigator.platform.toUpperCase().includes("MAC");
 const NEW_QUERY_SHORTCUT = isMac ? "⌘+N" : "Ctrl+N";
@@ -94,20 +93,27 @@ export function QueryTabBar() {
     return (
       <div
         key={tab.id}
-        className={`group flex max-w-[200px] flex-none items-center gap-1.5 border-r border-bg-tertiary px-3 py-1.5 text-xs ${isActive ? profile ? "text-text-primary" : "bg-bg-primary text-text-primary" : "text-text-secondary hover:bg-bg-tertiary"}`}
-        style={isActive && profile ? { backgroundColor: profile.background, color: profile.foreground, borderBottomColor: profile.foreground, borderBottomStyle: "solid", borderBottomWidth: 2 } : undefined}
+        className={`group flex max-w-[200px] flex-none items-center gap-1.5 border-r border-bg-tertiary px-3 py-1.5 text-xs ${profile ? "" : isActive ? "bg-bg-primary text-text-primary" : "text-text-secondary hover:bg-bg-tertiary"}`}
+        style={profile ? {
+          backgroundColor: profile.background,
+          color: profile.foreground,
+          ...(isActive
+            ? {
+                borderBottomColor: profile.foreground,
+                borderBottomStyle: "solid",
+                borderBottomWidth: 2,
+              }
+            : {}),
+        } : undefined}
         onContextMenu={(event) => handleContextMenu(event, tab.id)}
         onMouseDown={handleMiddleMouseDown}
         onAuxClick={(event) => handleAuxClick(event, tab.id)}
       >
-        {profile && (
-          <ColorProfileMarker profile={profile} size="xs" />
-        )}
         {tab.pinned && (
           <button
             type="button"
             className="shrink-0 text-text-secondary hover:text-text-primary"
-            style={isActive && profile ? { color: profile.foreground } : undefined}
+            style={profile ? { color: profile.foreground } : undefined}
             onClick={(event) => {
               event.stopPropagation();
               setTabPinned(tab.id, false);
@@ -127,13 +133,13 @@ export function QueryTabBar() {
           {tab.title}
         </button>
         {dirty && (
-          <span className="shrink-0 text-text-secondary" style={isActive && profile ? { color: profile.foreground } : undefined} title="Unsaved changes">
+          <span className="shrink-0 text-text-secondary" style={profile ? { color: profile.foreground } : undefined} title="Unsaved changes">
             &bull;
           </span>
         )}
         <button
           className="ml-0.5 shrink-0 text-text-secondary opacity-0 hover:text-text-primary group-hover:opacity-100 focus:opacity-100"
-          style={isActive && profile ? { color: profile.foreground } : undefined}
+          style={profile ? { color: profile.foreground } : undefined}
           onClick={(event) => {
             event.stopPropagation();
             removeTab(tab.id);

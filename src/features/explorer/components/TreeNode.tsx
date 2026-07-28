@@ -2,9 +2,7 @@ import type { ExplorerNode } from "../types";
 import { useExplorerStore } from "../store/explorerStore";
 import { NodeIcon } from "./NodeIcon";
 import { useConnectionStore } from "../../connection";
-import { useSettingsStore } from "../../settings";
-import { getEffectiveAlias, resolveColorProfile } from "../../../shared/connectionAppearance";
-import { ColorProfileMarker } from "../../../shared/components/ColorProfileMarker";
+import { getEffectiveAlias } from "../../../shared/connectionAppearance";
 
 interface TreeNodeProps {
   node: ExplorerNode;
@@ -15,9 +13,7 @@ interface TreeNodeProps {
 export function TreeNode({ node, depth, onContextMenu }: TreeNodeProps) {
   const { selectedNodeId, selectNode, toggleExpand } = useExplorerStore();
   const connection = useConnectionStore((state) => state.connections.find((item) => item.id === node.connectionId));
-  const customProfiles = useSettingsStore((state) => state.settings.connections.colorProfiles);
   const isSelected = selectedNodeId === node.id;
-  const profile = connection ? resolveColorProfile(connection.colorProfileId, customProfiles, connection.color) : null;
   const label = node.type === "server" && connection ? getEffectiveAlias(connection) : node.label || node.name;
 
   return (
@@ -72,11 +68,6 @@ export function TreeNode({ node, depth, onContextMenu }: TreeNodeProps) {
           </button>
         ) : null}
       </span>
-
-      {/* Color indicator for server nodes */}
-      {node.type === "server" && profile && (
-        <ColorProfileMarker profile={profile} />
-      )}
 
       {/* Node icon */}
       <NodeIcon type={node.type} folderKind={node.folderKind} />

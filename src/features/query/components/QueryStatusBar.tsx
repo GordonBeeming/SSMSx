@@ -2,9 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { useQueryStore } from "../store/queryStore";
 import { useConnectionStore } from "../../connection";
 import type { QueryExecutionState } from "../types";
-import { getEffectiveAlias, resolveColorProfile } from "../../../shared/connectionAppearance";
-import { useSettingsStore } from "../../settings";
-import { ColorProfileMarker } from "../../../shared/components/ColorProfileMarker";
+import { getEffectiveAlias } from "../../../shared/connectionAppearance";
 
 interface QueryStatusBarProps {
   tabId: string;
@@ -31,7 +29,6 @@ export function QueryStatusBar({ tabId }: QueryStatusBarProps) {
   const executionInfo = useQueryStore((s) => s.executionInfo[tabId]);
   const result = useQueryStore((s) => s.results[tabId]);
   const connections = useConnectionStore((s) => s.connections);
-  const customProfiles = useSettingsStore((s) => s.settings.connections.colorProfiles);
 
   const state = executionInfo?.state ?? "idle";
   const connection = tab
@@ -78,16 +75,6 @@ export function QueryStatusBar({ tabId }: QueryStatusBarProps) {
     <div className="flex items-center gap-4 border-t border-bg-tertiary bg-bg-secondary px-3 py-1 text-xs">
       {/* Connection info */}
       <div className="flex items-center gap-1.5">
-        {connection && (
-          <ColorProfileMarker
-            profile={resolveColorProfile(
-              connection.colorProfileId,
-              customProfiles,
-              connection.color
-            )}
-            size="xs"
-          />
-        )}
         <span className="text-text-secondary">
           {connection ? getEffectiveAlias(connection) : "Disconnected"}
           {tab?.database ? ` · ${tab.database}` : ""}

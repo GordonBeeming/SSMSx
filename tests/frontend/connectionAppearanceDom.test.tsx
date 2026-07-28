@@ -197,7 +197,7 @@ describe("ColorProfileCombobox", () => {
   it("supports arrow-key selection and restores focus", async () => {
     const user = userEvent.setup();
     const onChange = vi.fn();
-    render(
+    const view = render(
       <ColorProfileCombobox
         profiles={profiles}
         value="red"
@@ -208,7 +208,13 @@ describe("ColorProfileCombobox", () => {
     const combobox = screen.getByRole("combobox", {
       name: "Colour profile",
     });
+    expect(combobox.style.backgroundColor).toBe("rgb(254, 242, 242)");
+    expect(combobox.style.color).toBe("rgb(153, 27, 27)");
     await user.click(combobox);
+    expect(screen.getByRole("option", { name: "Blue" }).style.backgroundColor).toBe(
+      "rgb(239, 246, 255)"
+    );
+    expect(view.container.querySelectorAll("[data-profile-marker]")).toHaveLength(0);
     await user.keyboard("{ArrowDown}{Enter}");
 
     expect(onChange).toHaveBeenCalledWith("blue");
