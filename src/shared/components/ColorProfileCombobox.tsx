@@ -175,8 +175,8 @@ export function ColorProfileCombobox({
             : undefined
         }
       >
-        <span className="min-w-0">
-          <span className="truncate">{selected?.name ?? "No profiles"}</span>
+        <span className="min-w-0 flex-1 truncate">
+          {selected?.name ?? "No profiles"}
         </span>
         <span aria-hidden="true">⌄</span>
       </button>
