@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { QueryResultsTable } from "../../src/features/query/components/QueryResultsTable";
 import { QueryTabBar } from "../../src/features/query/components/QueryTabBar";
 import { QueryPanel } from "../../src/features/query/components/QueryPanel";
+import { QueryEditor } from "../../src/features/query/components/QueryEditor";
 import { ObjectExplorerTree } from "../../src/features/explorer/components/ObjectExplorerTree";
 import { useQueryStore } from "../../src/features/query/store/queryStore";
 import { useExplorerStore } from "../../src/features/explorer/store/explorerStore";
@@ -175,6 +176,23 @@ describe("query tab session and profile colours", () => {
       "#FFFFFF"
     );
     expect(editor.style.backgroundColor).toBe("");
+  });
+
+  it("profiles the gutter when only its foreground is supplied", () => {
+    render(
+      <QueryEditor
+        value="select 1"
+        onChange={() => undefined}
+        onExecute={() => undefined}
+        gutterForeground="#FFFFFF"
+      />
+    );
+
+    const editor = screen.getByTestId("query-editor");
+    expect(editor.className).toContain("query-editor-profiled");
+    expect(editor.style.getPropertyValue("--query-gutter-foreground")).toBe(
+      "#FFFFFF"
+    );
   });
 });
 

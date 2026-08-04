@@ -45,7 +45,11 @@ input, textarea, pre, [contenteditable] {
 }
 
 .object-explorer-profiled [role="treeitem"]:not([aria-selected="true"]):hover {
-  background-color: var(--object-explorer-background);
+  background-color: color-mix(
+    in srgb,
+    var(--object-explorer-background) 82%,
+    var(--object-explorer-foreground)
+  );
 }
 
 .query-editor-profiled .monaco-editor .margin {

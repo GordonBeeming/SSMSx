@@ -124,7 +124,7 @@ export function QueryEditor({
   return (
     <div
       data-testid="query-editor"
-      className={`h-full ${gutterBackground ? "query-editor-profiled" : ""}`}
+      className={`h-full ${gutterBackground || gutterForeground ? "query-editor-profiled" : ""}`}
       style={editorStyle}
     >
       <Editor
