@@ -4,11 +4,19 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { QueryResultsTable } from "../../src/features/query/components/QueryResultsTable";
 import { QueryTabBar } from "../../src/features/query/components/QueryTabBar";
+import { QueryPanel } from "../../src/features/query/components/QueryPanel";
+import { QueryEditor } from "../../src/features/query/components/QueryEditor";
+import { ObjectExplorerTree } from "../../src/features/explorer/components/ObjectExplorerTree";
 import { useQueryStore } from "../../src/features/query/store/queryStore";
+import { useExplorerStore } from "../../src/features/explorer/store/explorerStore";
 import type { QueryResult, QueryTab } from "../../src/features/query/types";
 import { useConnectionStore } from "../../src/features/connection/store/connectionStore";
 import { useSettingsStore } from "../../src/features/settings/store/settingsStore";
 import type { CustomColorProfile } from "../../src/features/settings/types";
+
+vi.mock("@monaco-editor/react", () => ({
+  default: () => <div data-testid="monaco-editor" />,
+}));
 
 const nightProfile: CustomColorProfile = {
   id: "night",
@@ -50,6 +58,11 @@ function resetStores() {
     selectedConnection: null,
     activeConnectionIds: [],
     error: null,
+  });
+  useExplorerStore.setState({
+    nodes: {},
+    rootNodeIds: [],
+    selectedNodeId: null,
   });
   useSettingsStore.setState({
     settings: {
@@ -130,6 +143,108 @@ describe("query tab session and profile colours", () => {
     expect(
       screen.getByTitle("app — Query 2").parentElement?.style.borderBottomStyle
     ).toBe("solid");
+  });
+
+  it("colours only the active query editor gutter from its connection profile", () => {
+    useConnectionStore.setState({
+      connections: [
+        {
+          id: "prod",
+          name: "Production",
+          serverName: "sql-prod",
+          authType: "SqlAuth",
+          encrypt: "Mandatory",
+          trustServerCertificate: false,
+          colorProfileId: "night",
+          createdAt: "2026-07-27T00:00:00Z",
+        },
+      ],
+    });
+    useQueryStore.setState({
+      tabs: [tabs[0]],
+      activeTabId: "unpinned",
+      tabSql: { unpinned: "select 1" },
+    });
+
+    render(<QueryPanel />);
+
+    const editor = screen.getByTestId("query-editor");
+    expect(editor.style.getPropertyValue("--query-gutter-background")).toBe(
+      "#000000"
+    );
+    expect(editor.style.getPropertyValue("--query-gutter-foreground")).toBe(
+      "#FFFFFF"
+    );
+    expect(editor.style.backgroundColor).toBe("");
+  });
+
+  it("profiles the gutter when only its foreground is supplied", () => {
+    render(
+      <QueryEditor
+        value="select 1"
+        onChange={() => undefined}
+        onExecute={() => undefined}
+        gutterForeground="#FFFFFF"
+      />
+    );
+
+    const editor = screen.getByTestId("query-editor");
+    expect(editor.className).toContain("query-editor-profiled");
+    expect(editor.style.getPropertyValue("--query-gutter-foreground")).toBe(
+      "#FFFFFF"
+    );
+  });
+});
+
+describe("object explorer profile colours", () => {
+  it("uses the selected node connection background for the explorer pane", () => {
+    useConnectionStore.setState({
+      connections: [
+        {
+          id: "prod",
+          name: "Production",
+          serverName: "sql-prod",
+          authType: "SqlAuth",
+          encrypt: "Mandatory",
+          trustServerCertificate: false,
+          colorProfileId: "night",
+          createdAt: "2026-07-27T00:00:00Z",
+        },
+      ],
+    });
+    useExplorerStore.setState({
+      nodes: {
+        "prod/server": {
+          id: "prod/server",
+          connectionId: "prod",
+          type: "server",
+          name: "Production",
+          expanded: false,
+          loading: false,
+          loaded: false,
+          children: [],
+          parentId: null,
+          hasChildren: true,
+        },
+      },
+      rootNodeIds: ["prod/server"],
+      selectedNodeId: "prod/server",
+    });
+
+    render(<ObjectExplorerTree />);
+
+    expect(screen.getByTestId("object-explorer").style.backgroundColor).toBe(
+      "rgb(0, 0, 0)"
+    );
+    expect(screen.getByTestId("object-explorer").style.color).toBe(
+      "rgb(255, 255, 255)"
+    );
+    expect(screen.getByTestId("object-explorer").style.getPropertyValue(
+      "--object-explorer-foreground"
+    )).toBe("#FFFFFF");
+    expect(screen.getByTestId("object-explorer").style.getPropertyValue(
+      "--color-text-primary"
+    )).toBe("");
   });
 });
 

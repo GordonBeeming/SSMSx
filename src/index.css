@@ -37,3 +37,21 @@ input, textarea, pre, [contenteditable] {
 .context-menu-submenu:hover > .context-menu-submenu-panel {
   display: block;
 }
+
+.object-explorer-profiled [role="treeitem"],
+.object-explorer-profiled [role="treeitem"] button,
+.object-explorer-profiled .object-explorer-profiled-text {
+  color: var(--object-explorer-foreground);
+}
+
+.object-explorer-profiled [role="treeitem"]:not([aria-selected="true"]):hover {
+  box-shadow: inset 0 0 0 1px var(--object-explorer-foreground);
+}
+
+.query-editor-profiled .monaco-editor .margin {
+  background-color: var(--query-gutter-background) !important;
+}
+
+.query-editor-profiled .monaco-editor .line-numbers {
+  color: var(--query-gutter-foreground) !important;
+}
