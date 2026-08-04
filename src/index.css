@@ -38,6 +38,16 @@ input, textarea, pre, [contenteditable] {
   display: block;
 }
 
+.object-explorer-profiled [role="treeitem"],
+.object-explorer-profiled [role="treeitem"] button,
+.object-explorer-profiled .object-explorer-profiled-text {
+  color: var(--object-explorer-foreground);
+}
+
+.object-explorer-profiled [role="treeitem"]:not([aria-selected="true"]):hover {
+  background-color: var(--object-explorer-background);
+}
+
 .query-editor-profiled .monaco-editor .margin {
   background-color: var(--query-gutter-background) !important;
 }

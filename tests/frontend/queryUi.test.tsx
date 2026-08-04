@@ -221,6 +221,12 @@ describe("object explorer profile colours", () => {
     expect(screen.getByTestId("object-explorer").style.color).toBe(
       "rgb(255, 255, 255)"
     );
+    expect(screen.getByTestId("object-explorer").style.getPropertyValue(
+      "--object-explorer-foreground"
+    )).toBe("#FFFFFF");
+    expect(screen.getByTestId("object-explorer").style.getPropertyValue(
+      "--color-text-primary"
+    )).toBe("");
   });
 });
 

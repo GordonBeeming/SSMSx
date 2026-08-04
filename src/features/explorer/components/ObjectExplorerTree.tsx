@@ -24,8 +24,8 @@ const MIN_EXPLORER_WIDTH = 180;
 const MAX_EXPLORER_WIDTH = 720;
 
 interface ObjectExplorerStyle extends CSSProperties {
-  "--color-text-primary"?: string;
-  "--color-text-secondary"?: string;
+  "--object-explorer-background"?: string;
+  "--object-explorer-foreground"?: string;
 }
 
 function clampExplorerWidth(value: number): number {
@@ -93,8 +93,8 @@ export function ObjectExplorerTree() {
     width: explorerWidth,
     backgroundColor: selectedProfile?.background,
     color: selectedProfile?.foreground,
-    "--color-text-primary": selectedProfile?.foreground,
-    "--color-text-secondary": selectedProfile?.foreground,
+    "--object-explorer-background": selectedProfile?.background,
+    "--object-explorer-foreground": selectedProfile?.foreground,
   };
 
   const [contextMenu, setContextMenu] = useState<{
@@ -206,11 +206,13 @@ export function ObjectExplorerTree() {
   return (
     <div
       data-testid="object-explorer"
-      className="relative flex h-full flex-none flex-col border-r border-bg-tertiary"
+      className={`relative flex h-full flex-none flex-col border-r border-bg-tertiary ${
+        selectedProfile ? "object-explorer-profiled" : ""
+      }`}
       style={explorerStyle}
     >
       <div className="border-b border-bg-tertiary px-3 py-1.5">
-        <span className="text-xs font-semibold tracking-wide text-text-secondary">
+        <span className="object-explorer-profiled-text text-xs font-semibold tracking-wide text-text-secondary">
           OBJECT EXPLORER
         </span>
       </div>
@@ -223,7 +225,7 @@ export function ObjectExplorerTree() {
         role="tree"
       >
         {visibleNodes.length === 0 ? (
-          <div className="p-3 text-xs text-text-secondary">
+          <div className="object-explorer-profiled-text p-3 text-xs text-text-secondary">
             No connections. Connect to a server to browse objects.
           </div>
         ) : (
