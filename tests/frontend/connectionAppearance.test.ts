@@ -37,6 +37,8 @@ test("custom profiles require unique names, valid hex, and AA contrast", () => {
   assert.equal(validateCustomColorProfile({ name: "prod", background: "#FFFFFF", foreground: "#111111" }, existing), "Profile names must be unique.");
   assert.equal(validateCustomColorProfile({ name: "Local", background: "red", foreground: "#111111" }, existing), "Use six-digit hex colours, for example #FEF2F2.");
   assert.equal(validateCustomColorProfile({ name: "Local", background: "#FFFFFF", foreground: "#AAAAAA" }, existing), "Foreground and background must meet 4.5:1 contrast.");
+  assert.equal(validateCustomColorProfile({ name: "Borderline", background: "#FFFFFF", foreground: "#767676" }, existing), null);
+  assert.ok(contrastRatio("#FFFFFF", "#767676") >= 4.5);
   assert.ok(contrastRatio("#FFFFFF", "#1A1A1A") >= 4.5);
 });
 
