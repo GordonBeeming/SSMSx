@@ -40,6 +40,13 @@ export function QueryPanel() {
   const activeConnection = activeTab?.connectionId
     ? connections.find((connection) => connection.id === activeTab.connectionId)
     : undefined;
+  const activeProfile = activeConnection
+    ? resolveColorProfile(
+        activeConnection.colorProfileId,
+        customProfiles,
+        activeConnection.color
+      )
+    : null;
   const splitContainerRef = useRef<HTMLDivElement>(null);
   const [resultsHeightPercent, setResultsHeightPercent] = useState(
     DEFAULT_RESULTS_HEIGHT_PERCENT
@@ -185,6 +192,8 @@ export function QueryPanel() {
             onChange={handleChange}
             onExecute={handleExecuteSql}
             intellisenseMetadata={intellisenseMetadata}
+            gutterBackground={activeProfile?.background}
+            gutterForeground={activeProfile?.foreground}
           />
         </div>
 
@@ -205,13 +214,7 @@ export function QueryPanel() {
               <QueryResultsTable
                 result={activeResult}
                 tabId={activeTabId}
-                profile={activeConnection
-                  ? resolveColorProfile(
-                      activeConnection.colorProfileId,
-                      customProfiles,
-                      activeConnection.color
-                    )
-                  : null}
+                profile={activeProfile}
               />
             </div>
           </>

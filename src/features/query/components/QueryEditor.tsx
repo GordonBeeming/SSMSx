@@ -1,4 +1,4 @@
-import { useRef, useCallback, useEffect } from "react";
+import { useRef, useCallback, useEffect, type CSSProperties } from "react";
 import Editor, { type OnMount, type Monaco } from "@monaco-editor/react";
 import type { editor as monacoEditor, IDisposable } from "monaco-editor";
 import { SqlCompletionProvider } from "./intellisense/SqlCompletionProvider";
@@ -10,6 +10,13 @@ interface QueryEditorProps {
   onChange: (value: string) => void;
   onExecute: (sql: string) => void;
   intellisenseMetadata?: IntelliSenseMetadata | null;
+  gutterBackground?: string;
+  gutterForeground?: string;
+}
+
+interface QueryEditorStyle extends CSSProperties {
+  "--query-gutter-background"?: string;
+  "--query-gutter-foreground"?: string;
 }
 
 export function QueryEditor({
@@ -17,6 +24,8 @@ export function QueryEditor({
   onChange,
   onExecute,
   intellisenseMetadata,
+  gutterBackground,
+  gutterForeground,
 }: QueryEditorProps) {
   const editorRef = useRef<monacoEditor.IStandaloneCodeEditor | null>(null);
   const completionProviderRef = useRef<SqlCompletionProvider | null>(null);
@@ -107,30 +116,41 @@ export function QueryEditor({
     [onChange]
   );
 
+  const editorStyle: QueryEditorStyle = {
+    "--query-gutter-background": gutterBackground,
+    "--query-gutter-foreground": gutterForeground,
+  };
+
   return (
-    <Editor
-      defaultLanguage="sql"
-      theme={theme}
-      value={value}
-      onChange={handleChange}
-      onMount={handleMount}
-      options={{
-        minimap: { enabled: false },
-        fontSize: 14,
-        lineNumbers: "on",
-        wordWrap: "on",
-        automaticLayout: true,
-        scrollBeyondLastLine: false,
-        renderWhitespace: "none",
-        tabSize: 4,
-        insertSpaces: true,
-        suggestOnTriggerCharacters: true,
-        quickSuggestions: true,
-        // Keep line 1 off the top edge — Monaco renders it flush against the
-        // viewport top and the overflow-hidden wrapper clips the glyph tops.
-        padding: { top: 8 },
-      }}
-    />
+    <div
+      data-testid="query-editor"
+      className={`h-full ${gutterBackground ? "query-editor-profiled" : ""}`}
+      style={editorStyle}
+    >
+      <Editor
+        defaultLanguage="sql"
+        theme={theme}
+        value={value}
+        onChange={handleChange}
+        onMount={handleMount}
+        options={{
+          minimap: { enabled: false },
+          fontSize: 14,
+          lineNumbers: "on",
+          wordWrap: "on",
+          automaticLayout: true,
+          scrollBeyondLastLine: false,
+          renderWhitespace: "none",
+          tabSize: 4,
+          insertSpaces: true,
+          suggestOnTriggerCharacters: true,
+          quickSuggestions: true,
+          // Keep line 1 off the top edge — Monaco renders it flush against the
+          // viewport top and the overflow-hidden wrapper clips the glyph tops.
+          padding: { top: 8 },
+        }}
+      />
+    </div>
   );
 }
 

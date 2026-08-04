@@ -37,3 +37,11 @@ input, textarea, pre, [contenteditable] {
 .context-menu-submenu:hover > .context-menu-submenu-panel {
   display: block;
 }
+
+.query-editor-profiled .monaco-editor .margin {
+  background-color: var(--query-gutter-background) !important;
+}
+
+.query-editor-profiled .monaco-editor .line-numbers {
+  color: var(--query-gutter-foreground) !important;
+}
