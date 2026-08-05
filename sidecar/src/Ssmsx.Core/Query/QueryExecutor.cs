@@ -101,6 +101,12 @@ public class QueryExecutor
                 Connection = connection,
                 CommandTimeout = DefaultCommandTimeoutSeconds
             };
+            cmd.StatementCompleted += (_, args) =>
+            {
+                var message = CreateAffectedRowMessage(args.RecordCount);
+                if (message is not null)
+                    messages.Add(message);
+            };
             _cancellationManager.SetCommand(queryId, cmd);
 
             foreach (var batchSql in SplitBatches(sql))
@@ -234,11 +240,47 @@ public class QueryExecutor
 
             await onBatch(cancelledBatch);
         }
+        catch (SqlException)
+        {
+            stopwatch.Stop();
+
+            if (messages.Count > 0)
+            {
+                batchNumber++;
+                var messageBatch = new QueryExecuteResult
+                {
+                    QueryId = queryId,
+                    Batch = batchNumber,
+                    Done = false,
+                    ExecutionTimeMs = stopwatch.ElapsedMilliseconds,
+                    TotalRows = totalRows,
+                    Messages = messages,
+                    Database = connection.Database
+                };
+
+                await onBatch(messageBatch);
+            }
+
+            throw;
+        }
         finally
         {
             connection.InfoMessage -= infoMessageHandler;
             _cancellationManager.Remove(queryId);
         }
+    }
+
+    internal static QueryMessage? CreateAffectedRowMessage(int recordCount)
+    {
+        if (recordCount < 0)
+            return null;
+
+        var rowLabel = recordCount == 1 ? "row" : "rows";
+        return new QueryMessage
+        {
+            Text = $"({recordCount} {rowLabel} affected)",
+            Severity = "info"
+        };
     }
 
     internal static IEnumerable<string> SplitBatches(string sql)

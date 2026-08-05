@@ -38,14 +38,30 @@ input, textarea, pre, [contenteditable] {
   display: block;
 }
 
-.object-explorer-profiled [role="treeitem"],
-.object-explorer-profiled [role="treeitem"] button,
-.object-explorer-profiled .object-explorer-profiled-text {
-  color: var(--object-explorer-foreground);
+.object-explorer-profiled-row {
+  background-color: var(--object-explorer-row-background);
 }
 
-.object-explorer-profiled [role="treeitem"]:not([aria-selected="true"]):hover {
-  box-shadow: inset 0 0 0 1px var(--object-explorer-foreground);
+.object-explorer-profiled-row,
+.object-explorer-profiled-row button,
+.object-explorer-profiled-row button:hover,
+.object-explorer-profiled-row button:focus-visible {
+  color: var(--object-explorer-row-foreground);
+}
+
+.object-explorer-profiled-row[aria-selected="true"] {
+  box-shadow: inset 3px 0 0 var(--object-explorer-row-foreground);
+}
+
+.object-explorer-profiled-row:not([aria-selected="true"]):hover {
+  box-shadow: inset 0 0 0 1px var(--object-explorer-row-foreground);
+}
+
+@media (forced-colors: active) {
+  .object-explorer-profiled-row[aria-selected="true"] {
+    outline: 2px solid Highlight;
+    outline-offset: -2px;
+  }
 }
 
 .query-editor-profiled .monaco-editor .margin {

@@ -18,6 +18,25 @@ vi.mock("@monaco-editor/react", () => ({
   default: () => <div data-testid="monaco-editor" />,
 }));
 
+vi.mock("@tanstack/react-virtual", () => ({
+  useVirtualizer: ({
+    count,
+    estimateSize,
+  }: {
+    count: number;
+    estimateSize: () => number;
+  }) => ({
+    getTotalSize: () => count * estimateSize(),
+    getVirtualItems: () =>
+      Array.from({ length: count }, (_, index) => ({
+        key: index,
+        index,
+        size: estimateSize(),
+        start: index * estimateSize(),
+      })),
+  }),
+}));
+
 const nightProfile: CustomColorProfile = {
   id: "night",
   name: "Night",
@@ -77,6 +96,44 @@ beforeEach(resetStores);
 afterEach(cleanup);
 
 describe("query tab session and profile colours", () => {
+  it("keeps streamed affected-row messages before a later query error", () => {
+    useQueryStore.setState({
+      tabs: [tabs[0]],
+      activeTabId: "unpinned",
+      executionInfo: {
+        unpinned: {
+          state: "executing",
+          queryId: "query-1",
+          requestId: "request-1",
+          startTime: Date.now(),
+        },
+      },
+    });
+
+    useQueryStore.getState().handleResultsBatch({
+      queryId: "query-1",
+      requestId: "request-1",
+      batch: 1,
+      done: false,
+      messages: [{ text: "(2 rows affected)", severity: "info" }],
+    });
+    useQueryStore.getState().handleQueryError(
+      "query-1",
+      "request-1",
+      "Invalid object name 'dbo.TableThatDoesNotExist'."
+    );
+
+    const state = useQueryStore.getState();
+    expect(state.executionInfo.unpinned.state).toBe("failed");
+    expect(state.results.unpinned.messages).toEqual([
+      { text: "(2 rows affected)", severity: "info" },
+      {
+        text: "Invalid object name 'dbo.TableThatDoesNotExist'.",
+        severity: "error",
+      },
+    ]);
+  });
+
   it("round-trips pinned tabs, ordering, SQL, and the active tab through localStorage", () => {
     useQueryStore.setState({
       tabs,
@@ -197,7 +254,7 @@ describe("query tab session and profile colours", () => {
 });
 
 describe("object explorer profile colours", () => {
-  it("uses the selected node connection background for the explorer pane", () => {
+  it("applies each connection profile to its own explorer rows", () => {
     useConnectionStore.setState({
       connections: [
         {
@@ -210,6 +267,16 @@ describe("object explorer profile colours", () => {
           colorProfileId: "night",
           createdAt: "2026-07-27T00:00:00Z",
         },
+        {
+          id: "reporting",
+          name: "Reporting",
+          serverName: "sql-reporting",
+          authType: "SqlAuth",
+          encrypt: "Mandatory",
+          trustServerCertificate: false,
+          colorProfileId: "blue",
+          createdAt: "2026-07-27T00:00:00Z",
+        },
       ],
     });
     useExplorerStore.setState({
@@ -219,32 +286,81 @@ describe("object explorer profile colours", () => {
           connectionId: "prod",
           type: "server",
           name: "Production",
+          expanded: true,
+          loading: false,
+          loaded: true,
+          children: ["prod/master"],
+          parentId: null,
+          hasChildren: true,
+        },
+        "prod/master": {
+          id: "prod/master",
+          connectionId: "prod",
+          type: "database",
+          name: "master",
           expanded: false,
           loading: false,
           loaded: false,
           children: [],
+          parentId: "prod/server",
+          hasChildren: false,
+        },
+        "reporting/server": {
+          id: "reporting/server",
+          connectionId: "reporting",
+          type: "server",
+          name: "Reporting",
+          expanded: true,
+          loading: false,
+          loaded: true,
+          children: ["reporting/warehouse"],
           parentId: null,
           hasChildren: true,
         },
+        "reporting/warehouse": {
+          id: "reporting/warehouse",
+          connectionId: "reporting",
+          type: "database",
+          name: "warehouse",
+          expanded: false,
+          loading: false,
+          loaded: false,
+          children: [],
+          parentId: "reporting/server",
+          hasChildren: false,
+        },
       },
-      rootNodeIds: ["prod/server"],
-      selectedNodeId: "prod/server",
+      rootNodeIds: ["prod/server", "reporting/server"],
+      selectedNodeId: "prod/master",
     });
 
     render(<ObjectExplorerTree />);
 
-    expect(screen.getByTestId("object-explorer").style.backgroundColor).toBe(
-      "rgb(0, 0, 0)"
-    );
-    expect(screen.getByTestId("object-explorer").style.color).toBe(
-      "rgb(255, 255, 255)"
-    );
-    expect(screen.getByTestId("object-explorer").style.getPropertyValue(
-      "--object-explorer-foreground"
-    )).toBe("#FFFFFF");
-    expect(screen.getByTestId("object-explorer").style.getPropertyValue(
-      "--color-text-primary"
-    )).toBe("");
+    const explorer = screen.getByTestId("object-explorer");
+    const production = screen.getByRole("treeitem", { name: "Production" });
+    const master = screen.getByRole("treeitem", { name: "master" });
+    const reporting = screen.getByRole("treeitem", { name: "Reporting" });
+    const warehouse = screen.getByRole("treeitem", { name: "warehouse" });
+
+    expect(explorer.className).not.toContain("object-explorer-profiled");
+    expect(explorer.style.backgroundColor).toBe("");
+    expect(explorer.style.color).toBe("");
+
+    for (const row of [production, master]) {
+      expect(row.style.getPropertyValue("--object-explorer-row-background")).toBe("#000000");
+      expect(row.style.getPropertyValue("--object-explorer-row-foreground")).toBe("#FFFFFF");
+      expect(row.className).toContain("object-explorer-profiled-row");
+    }
+    for (const row of [reporting, warehouse]) {
+      expect(row.style.getPropertyValue("--object-explorer-row-background")).toBe("#EFF6FF");
+      expect(row.style.getPropertyValue("--object-explorer-row-foreground")).toBe("#1D4ED8");
+      expect(row.className).toContain("object-explorer-profiled-row");
+    }
+
+    expect(master.getAttribute("aria-selected")).toBe("true");
+    expect(production.getAttribute("aria-selected")).toBe("false");
+    expect(production.className).not.toContain("hover:bg-bg-tertiary");
+    expect(master.className).not.toContain("bg-accent/15");
   });
 });
 

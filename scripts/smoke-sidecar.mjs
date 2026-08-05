@@ -67,7 +67,7 @@ child.on("exit", (code) => {
 
 let seq = 0;
 
-function send(method, params, { streaming = false } = {}) {
+function send(method, params, { streaming = false, allowError = false } = {}) {
   const id = `smoke-${++seq}`;
   const request = { id, method, params };
   const promise = new Promise((resolve, reject) => {
@@ -76,8 +76,11 @@ function send(method, params, { streaming = false } = {}) {
   child.stdin.write(`${JSON.stringify(request)}\n`);
   return promise.then((responses) => {
     const failed = responses.find((response) => response.error);
-    if (failed) {
+    if (failed && !allowError) {
       throw new Error(`${method} failed: ${failed.error.code} ${failed.error.message}`);
+    }
+    if (allowError) {
+      return responses;
     }
     return streaming ? responses.map((response) => response.result) : responses.at(-1).result;
   });
@@ -222,6 +225,88 @@ try {
   assert(messages.rows.length === 1, "PRINT + SELECT should return one data row");
   assert(messages.messages.some((message) => message.text.includes("hello from ssmsx smoke")), "PRINT message missing");
 
+  const affectedRows = summarizeQueryResults(
+    await send(
+      "query.execute",
+      {
+        connectionId: activeConnectionId,
+        database,
+        sql: [
+          "CREATE TABLE #SsmsxAffectedRows (Id int NOT NULL);",
+          "INSERT INTO #SsmsxAffectedRows (Id) VALUES (1), (2);",
+          "UPDATE #SsmsxAffectedRows SET Id = 3 WHERE Id = 1;",
+          "DELETE FROM #SsmsxAffectedRows WHERE Id = 2;",
+          "UPDATE #SsmsxAffectedRows SET Id = 4 WHERE Id = 999;",
+        ].join("\n"),
+      },
+      { streaming: true }
+    )
+  );
+  const affectedRowMessages = affectedRows.messages
+    .map((message) => message.text)
+    .filter((text) => /^\(\d+ rows? affected\)$/.test(text));
+  assert(
+    JSON.stringify(affectedRowMessages) === JSON.stringify(["(2 rows affected)", "(1 row affected)", "(1 row affected)", "(0 rows affected)"]),
+    `affected-row messages should preserve DML event order: ${JSON.stringify(affectedRowMessages)}`
+  );
+
+  const interleavedMessages = summarizeQueryResults(
+    await send(
+      "query.execute",
+      {
+        connectionId: activeConnectionId,
+        database,
+        sql: [
+          "CREATE TABLE #SsmsxInterleavedMessages (Id int NOT NULL);",
+          "PRINT 'before affected row';",
+          "INSERT INTO #SsmsxInterleavedMessages (Id) VALUES (1);",
+          "PRINT 'between affected rows';",
+          "UPDATE #SsmsxInterleavedMessages SET Id = 2 WHERE Id = 1;",
+          "PRINT 'after affected row';",
+        ].join("\n"),
+      },
+      { streaming: true }
+    )
+  ).messages
+    .map((message) => message.text)
+    .filter((text) => /affected row/.test(text) || /^\(\d+ rows? affected\)$/.test(text));
+  assert(
+    JSON.stringify(interleavedMessages) === JSON.stringify([
+      "before affected row",
+      "(1 row affected)",
+      "between affected rows",
+      "(1 row affected)",
+      "after affected row",
+    ]),
+    `PRINT and affected-row messages should preserve wire order: ${JSON.stringify(interleavedMessages)}`
+  );
+
+  const noCount = summarizeQueryResults(
+    await send(
+      "query.execute",
+      {
+        connectionId: activeConnectionId,
+        database,
+        sql: [
+          "CREATE TABLE #SsmsxNoCountRows (Id int NOT NULL);",
+          "SET NOCOUNT ON;",
+          "INSERT INTO #SsmsxNoCountRows (Id) VALUES (1), (2);",
+          "UPDATE #SsmsxNoCountRows SET Id = 3 WHERE Id = 1;",
+          "DELETE FROM #SsmsxNoCountRows WHERE Id = 2;",
+          "SET NOCOUNT OFF;",
+        ].join("\n"),
+      },
+      { streaming: true }
+    )
+  );
+  const noCountRowMessages = noCount.messages
+    .map((message) => message.text)
+    .filter((text) => /^\(\d+ rows? affected\)$/.test(text));
+  assert(
+    noCountRowMessages.length === 0,
+    `SET NOCOUNT ON should suppress affected-row messages: ${JSON.stringify(noCountRowMessages)}`
+  );
+
   const multiResult = summarizeQueryResults(
     await send(
       "query.execute",
@@ -240,19 +325,34 @@ try {
   assert(multiResult.resultSets[0].rows.length === 2, "first result set should return two rows");
   assert(multiResult.resultSets[1].rows.length === 3, "second result set should return three rows");
 
-  const invalid = await send(
+  const invalidResponses = await send(
     "query.execute",
     {
       connectionId: activeConnectionId,
       database,
-      sql: "SELECT * FROM dbo.TableThatDoesNotExist;",
+      sql: [
+        "CREATE TABLE #SsmsxAffectedRowsBeforeError (Id int NOT NULL);",
+        "INSERT INTO #SsmsxAffectedRowsBeforeError (Id) VALUES (1), (2);",
+        "SELECT * FROM dbo.TableThatDoesNotExist;",
+      ].join("\n"),
     },
-    { streaming: true }
-  ).then(
-    () => null,
-    (error) => error
+    { streaming: true, allowError: true }
   );
-  assert(invalid?.message.includes("QUERY_ERROR"), "invalid query should surface QUERY_ERROR");
+  const affectedRowsBeforeErrorIndex = invalidResponses.findIndex((response) =>
+    response.result?.messages?.some((message) => message.text === "(2 rows affected)")
+  );
+  const queryErrorIndex = invalidResponses.findIndex(
+    (response) => response.error?.code === "QUERY_ERROR"
+  );
+  assert(
+    affectedRowsBeforeErrorIndex >= 0,
+    "successful DML before an invalid statement should preserve its affected-row message"
+  );
+  assert(queryErrorIndex >= 0, "invalid query should surface QUERY_ERROR");
+  assert(
+    affectedRowsBeforeErrorIndex < queryErrorIndex,
+    "affected-row messages should be delivered before the later query error"
+  );
 
   const cancelId = `smoke-${++seq}`;
   const cancelPromise = new Promise((resolve, reject) => {

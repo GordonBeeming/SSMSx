@@ -5,6 +5,26 @@ namespace Ssmsx.Core.Tests.Query;
 
 public class QueryExecutorTests
 {
+    [Theory]
+    [InlineData(-1, null)]
+    [InlineData(0, "(0 rows affected)")]
+    [InlineData(1, "(1 row affected)")]
+    [InlineData(2, "(2 rows affected)")]
+    public void CreateAffectedRowMessage_FormatsReportedRecordCounts(int recordCount, string? expectedText)
+    {
+        var message = QueryExecutor.CreateAffectedRowMessage(recordCount);
+
+        if (expectedText is null)
+        {
+            Assert.Null(message);
+            return;
+        }
+
+        Assert.NotNull(message);
+        Assert.Equal(expectedText, message.Text);
+        Assert.Equal("info", message.Severity);
+    }
+
     [Fact]
     public void SplitBatches_RecognizesStandaloneCaseInsensitiveSeparators()
     {
