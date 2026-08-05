@@ -96,6 +96,44 @@ beforeEach(resetStores);
 afterEach(cleanup);
 
 describe("query tab session and profile colours", () => {
+  it("keeps streamed affected-row messages before a later query error", () => {
+    useQueryStore.setState({
+      tabs: [tabs[0]],
+      activeTabId: "unpinned",
+      executionInfo: {
+        unpinned: {
+          state: "executing",
+          queryId: "query-1",
+          requestId: "request-1",
+          startTime: Date.now(),
+        },
+      },
+    });
+
+    useQueryStore.getState().handleResultsBatch({
+      queryId: "query-1",
+      requestId: "request-1",
+      batch: 1,
+      done: false,
+      messages: [{ text: "(2 rows affected)", severity: "info" }],
+    });
+    useQueryStore.getState().handleQueryError(
+      "query-1",
+      "request-1",
+      "Invalid object name 'dbo.TableThatDoesNotExist'."
+    );
+
+    const state = useQueryStore.getState();
+    expect(state.executionInfo.unpinned.state).toBe("failed");
+    expect(state.results.unpinned.messages).toEqual([
+      { text: "(2 rows affected)", severity: "info" },
+      {
+        text: "Invalid object name 'dbo.TableThatDoesNotExist'.",
+        severity: "error",
+      },
+    ]);
+  });
+
   it("round-trips pinned tabs, ordering, SQL, and the active tab through localStorage", () => {
     useQueryStore.setState({
       tabs,
