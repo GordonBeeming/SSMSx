@@ -101,6 +101,18 @@ test("Object Explorer applies profile styles per subtree without tinting its she
       "rgb(255, 255, 255)"
     );
 
+    const productionToggle = production.getByRole("button");
+    await productionToggle.hover();
+    assert.equal(
+      await productionToggle.evaluate((element) => getComputedStyle(element).color),
+      "rgb(255, 255, 255)"
+    );
+    await productionToggle.focus();
+    assert.equal(
+      await productionToggle.evaluate((element) => getComputedStyle(element).color),
+      "rgb(255, 255, 255)"
+    );
+
     const selectedColours = await selectedDatabase.evaluate((element) => {
       const style = getComputedStyle(element);
       return {

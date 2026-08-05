@@ -43,7 +43,9 @@ input, textarea, pre, [contenteditable] {
 }
 
 .object-explorer-profiled-row,
-.object-explorer-profiled-row button {
+.object-explorer-profiled-row button,
+.object-explorer-profiled-row button:hover,
+.object-explorer-profiled-row button:focus-visible {
   color: var(--object-explorer-row-foreground);
 }
 
