@@ -4,7 +4,6 @@ import {
   useState,
   useMemo,
   useCallback,
-  type CSSProperties,
   type PointerEvent as ReactPointerEvent,
 } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
@@ -22,11 +21,6 @@ const EXPLORER_WIDTH_STORAGE_KEY = "ssmsx.objectExplorer.width";
 const DEFAULT_EXPLORER_WIDTH = 260;
 const MIN_EXPLORER_WIDTH = 180;
 const MAX_EXPLORER_WIDTH = 720;
-
-interface ObjectExplorerStyle extends CSSProperties {
-  "--object-explorer-background"?: string;
-  "--object-explorer-foreground"?: string;
-}
 
 function clampExplorerWidth(value: number): number {
   return Math.min(MAX_EXPLORER_WIDTH, Math.max(MIN_EXPLORER_WIDTH, value));
@@ -58,7 +52,6 @@ export function ObjectExplorerTree() {
   // Subscribe to the state that getVisibleNodes depends on
   const nodes = useExplorerStore((s) => s.nodes);
   const rootNodeIds = useExplorerStore((s) => s.rootNodeIds);
-  const selectedNodeId = useExplorerStore((s) => s.selectedNodeId);
   const getVisibleNodes = useExplorerStore((s) => s.getVisibleNodes);
   const refreshNode = useExplorerStore((s) => s.refreshNode);
   const refreshLoadedTableFolders = useExplorerStore((s) => s.refreshLoadedTableFolders);
@@ -69,18 +62,25 @@ export function ObjectExplorerTree() {
     (s) => s.settings.connections.colorProfiles
   );
   const connections = useConnectionStore((s) => s.connections);
-  const selectedNode = selectedNodeId ? nodes[selectedNodeId] : undefined;
-  const selectedConnection = selectedNode
-    ? connections.find((connection) => connection.id === selectedNode.connectionId)
-    : undefined;
-  const selectedProfile = selectedConnection
-    ? resolveColorProfile(
-        selectedConnection.colorProfileId,
-        customProfiles,
-        selectedConnection.color
-      )
-    : null;
   const visibleNodes = useMemo(() => getVisibleNodes(), [nodes, rootNodeIds, getVisibleNodes]);
+  const connectionsById = useMemo(
+    () => new Map(connections.map((connection) => [connection.id, connection])),
+    [connections]
+  );
+  const profilesByConnectionId = useMemo(
+    () =>
+      new Map(
+        connections.map((connection) => [
+          connection.id,
+          resolveColorProfile(
+            connection.colorProfileId,
+            customProfiles,
+            connection.color
+          ),
+        ])
+      ),
+    [connections, customProfiles]
+  );
   const parentRef = useRef<HTMLDivElement>(null);
   const previousGroupTablesBySchemaRef = useRef(groupTablesBySchema);
   const resizeStartXRef = useRef(0);
@@ -89,13 +89,6 @@ export function ObjectExplorerTree() {
   const handleKeyDown = useTreeKeyboard(visibleNodes);
   const getMenuItems = useExplorerContextMenu();
   const [explorerWidth, setExplorerWidth] = useState(loadExplorerWidth);
-  const explorerStyle: ObjectExplorerStyle = {
-    width: explorerWidth,
-    backgroundColor: selectedProfile?.background,
-    color: selectedProfile?.foreground,
-    "--object-explorer-background": selectedProfile?.background,
-    "--object-explorer-foreground": selectedProfile?.foreground,
-  };
 
   const [contextMenu, setContextMenu] = useState<{
     x: number;
@@ -206,13 +199,11 @@ export function ObjectExplorerTree() {
   return (
     <div
       data-testid="object-explorer"
-      className={`relative flex h-full flex-none flex-col border-r border-bg-tertiary ${
-        selectedProfile ? "object-explorer-profiled" : ""
-      }`}
-      style={explorerStyle}
+      className="relative flex h-full flex-none flex-col border-r border-bg-tertiary"
+      style={{ width: explorerWidth }}
     >
       <div className="border-b border-bg-tertiary px-3 py-1.5">
-        <span className="object-explorer-profiled-text text-xs font-semibold tracking-wide text-text-secondary">
+        <span className="text-xs font-semibold tracking-wide text-text-secondary">
           OBJECT EXPLORER
         </span>
       </div>
@@ -225,7 +216,7 @@ export function ObjectExplorerTree() {
         role="tree"
       >
         {visibleNodes.length === 0 ? (
-          <div className="object-explorer-profiled-text p-3 text-xs text-text-secondary">
+          <div className="p-3 text-xs text-text-secondary">
             No connections. Connect to a server to browse objects.
           </div>
         ) : (
@@ -253,6 +244,8 @@ export function ObjectExplorerTree() {
                   <TreeNode
                     node={node}
                     depth={depth}
+                    connection={connectionsById.get(node.connectionId)}
+                    profile={profilesByConnectionId.get(node.connectionId)}
                     onContextMenu={handleContextMenu}
                   />
                 </div>

@@ -1,29 +1,50 @@
+import type { CSSProperties } from "react";
+import type { ConnectionInfo } from "../../connection";
+import type { ColorProfile } from "../../settings/types";
 import type { ExplorerNode } from "../types";
 import { useExplorerStore } from "../store/explorerStore";
 import { NodeIcon } from "./NodeIcon";
-import { useConnectionStore } from "../../connection";
 import { getEffectiveAlias } from "../../../shared/connectionAppearance";
 
 interface TreeNodeProps {
   node: ExplorerNode;
   depth: number;
+  connection?: ConnectionInfo;
+  profile?: ColorProfile;
   onContextMenu: (e: React.MouseEvent, node: ExplorerNode) => void;
 }
 
-export function TreeNode({ node, depth, onContextMenu }: TreeNodeProps) {
+interface TreeNodeStyle extends CSSProperties {
+  "--object-explorer-row-background"?: string;
+  "--object-explorer-row-foreground"?: string;
+}
+
+export function TreeNode({
+  node,
+  depth,
+  connection,
+  profile,
+  onContextMenu,
+}: TreeNodeProps) {
   const { selectedNodeId, selectNode, toggleExpand } = useExplorerStore();
-  const connection = useConnectionStore((state) => state.connections.find((item) => item.id === node.connectionId));
   const isSelected = selectedNodeId === node.id;
   const label = node.type === "server" && connection ? getEffectiveAlias(connection) : node.label || node.name;
+  const rowStyle: TreeNodeStyle = {
+    paddingLeft: `${depth * 16 + 4}px`,
+    "--object-explorer-row-background": profile?.background,
+    "--object-explorer-row-foreground": profile?.foreground,
+  };
 
   return (
     <div
       className={`flex cursor-pointer items-center gap-1 py-0.5 pr-2 text-sm ${
-        isSelected
+        profile
+          ? "object-explorer-profiled-row"
+          : isSelected
           ? "bg-accent/15 text-text-primary"
           : "text-text-secondary hover:bg-bg-tertiary hover:text-text-primary"
       }`}
-      style={{ paddingLeft: `${depth * 16 + 4}px` }}
+      style={rowStyle}
       onClick={() => selectNode(node.id)}
       onDoubleClick={() => {
         if (node.hasChildren) toggleExpand(node.id);
