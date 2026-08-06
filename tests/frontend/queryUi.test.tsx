@@ -71,6 +71,7 @@ function resetStores() {
     executionInfo: {},
     results: {},
     intellisenseCache: {},
+    pendingCursorOffsets: {},
   });
   useConnectionStore.setState({
     connections: [],
@@ -87,6 +88,7 @@ function resetStores() {
     settings: {
       explorer: { groupTablesBySchema: true },
       workspace: { persistQueryTabs: true },
+      queryEditor: { newQueryTemplate: "\n".repeat(30) + "{{cursor}}" },
       connections: { colorProfiles: [nightProfile] },
     },
   });
@@ -160,6 +162,80 @@ describe("query tab session and profile colours", () => {
       unpinned: "select 1",
       pinned: "select 2",
     });
+    expect(useQueryStore.getState().pendingCursorOffsets).toEqual({});
+  });
+
+  it("initializes blank queries from the template without marking them dirty", () => {
+    useSettingsStore.setState((state) => ({
+      settings: {
+        ...state.settings,
+        queryEditor: { newQueryTemplate: "SELECT {{cursor}}FROM dbo.Users\n" },
+      },
+    }));
+
+    useQueryStore.getState().addTab({
+      id: "templated",
+      connectionId: null,
+      database: "",
+      title: "Query 1",
+    });
+
+    const state = useQueryStore.getState();
+    expect(state.tabs[0].initialSql).toBe("SELECT FROM dbo.Users\n");
+    expect(state.tabSql.templated).toBe("SELECT FROM dbo.Users\n");
+    expect(state.pendingCursorOffsets).toEqual({ templated: 7 });
+    expect(state.isTabDirty("templated")).toBe(false);
+  });
+
+  it("does not apply the template to generated scripts", () => {
+    useQueryStore.getState().addTab({
+      id: "generated",
+      connectionId: "prod",
+      database: "master",
+      initialSql: "SELECT * FROM sys.databases;\n",
+      title: "Select Top 1000 Rows",
+    });
+
+    const state = useQueryStore.getState();
+    expect(state.tabs[0].initialSql).toBe("SELECT * FROM sys.databases;\n");
+    expect(state.tabSql.generated).toBe("SELECT * FROM sys.databases;\n");
+    expect(state.pendingCursorOffsets).toEqual({});
+  });
+
+  it("consumes and cleans pending cursor positions when tabs close", () => {
+    useQueryStore.setState({
+      tabs: [tabs[0], tabs[1]],
+      activeTabId: "unpinned",
+      tabSql: { unpinned: "", pinned: "" },
+      pendingCursorOffsets: { unpinned: 1, pinned: 2 },
+    });
+
+    useQueryStore.getState().consumePendingCursorOffset("unpinned");
+    expect(useQueryStore.getState().pendingCursorOffsets).toEqual({ pinned: 2 });
+
+    useQueryStore.getState().closeOtherTabs("unpinned");
+    expect(useQueryStore.getState().pendingCursorOffsets).toEqual({});
+
+    useQueryStore.setState({ pendingCursorOffsets: { unpinned: 1 } });
+    useQueryStore.getState().removeTab("unpinned");
+    expect(useQueryStore.getState().pendingCursorOffsets).toEqual({});
+  });
+
+  it("does not persist cursor positions into saved query sessions", () => {
+    useQueryStore.setState({
+      tabs: [tabs[0]],
+      activeTabId: "unpinned",
+      tabSql: { unpinned: "select 1" },
+      pendingCursorOffsets: { unpinned: 4 },
+    });
+
+    useQueryStore.getState().saveSession();
+    const saved = window.localStorage.getItem("ssmsx.querySession.v1");
+    expect(saved).not.toBeNull();
+    expect(JSON.parse(saved ?? "{}")).not.toHaveProperty("pendingCursorOffsets");
+
+    expect(useQueryStore.getState().restoreSavedSession()).toBe(true);
+    expect(useQueryStore.getState().pendingCursorOffsets).toEqual({});
   });
 
   it("renders wrapping tab bands with both profile colours on active and inactive tabs", () => {

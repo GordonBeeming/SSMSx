@@ -28,8 +28,18 @@ function clampResultsHeight(value: number): number {
 }
 
 export function QueryPanel() {
-  const { activeTabId, tabs, tabSql, updateSql, executeQuery, cancelQuery, results, loadIntelliSense } =
-    useQueryStore();
+  const {
+    activeTabId,
+    tabs,
+    tabSql,
+    updateSql,
+    executeQuery,
+    cancelQuery,
+    results,
+    loadIntelliSense,
+    pendingCursorOffsets,
+    consumePendingCursorOffset,
+  } = useQueryStore();
   const activeConnectionIds = useConnectionStore((s) => s.activeConnectionIds);
   const connections = useConnectionStore((s) => s.connections);
   const customProfiles = useSettingsStore((s) => s.settings.connections.colorProfiles);
@@ -191,6 +201,9 @@ export function QueryPanel() {
             value={activeSql}
             onChange={handleChange}
             onExecute={handleExecuteSql}
+            pendingCursorRequestId={activeTabId}
+            pendingCursorOffset={pendingCursorOffsets[activeTabId]}
+            onCursorPositionApplied={() => consumePendingCursorOffset(activeTabId)}
             intellisenseMetadata={intellisenseMetadata}
             gutterBackground={activeProfile?.background}
             gutterForeground={activeProfile?.foreground}

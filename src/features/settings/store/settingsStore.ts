@@ -6,6 +6,7 @@ import {
   normalizeCustomColorProfiles,
   validateCustomColorProfile,
 } from "../../../shared/connectionAppearance";
+import { hasAtMostOneCursorMarker } from "../../query/utils/newQueryTemplate";
 
 export const SETTINGS_STORAGE_KEY = "ssmsx.settings";
 export const SAVE_SETTINGS_ERROR =
@@ -15,6 +16,7 @@ interface SettingsState {
   settings: AppSettings;
   setGroupTablesBySchema: (value: boolean) => string | null;
   setPersistQueryTabs: (value: boolean) => string | null;
+  setNewQueryTemplate: (value: string) => string | null;
   saveColorProfiles: (profiles: CustomColorProfile[]) => string | null;
 }
 
@@ -26,29 +28,64 @@ function readColorProfiles(value: unknown): CustomColorProfile[] {
   return normalizeCustomColorProfiles(value);
 }
 
+function readString(value: unknown, fallback: string): string {
+  return typeof value === "string" ? value : fallback;
+}
+
+function readNewQueryTemplate(value: unknown, fallback: string): string {
+  const template = readString(value, fallback);
+  return hasAtMostOneCursorMarker(template) ? template : fallback;
+}
+
+function readProperty(value: unknown, property: string): unknown {
+  if (
+    typeof value !== "object" ||
+    value === null ||
+    Array.isArray(value) ||
+    !Object.prototype.hasOwnProperty.call(value, property)
+  ) {
+    return undefined;
+  }
+
+  return Reflect.get(value, property);
+}
+
 export function loadSettings(): AppSettings {
   try {
     const storedValue = window.localStorage.getItem(SETTINGS_STORAGE_KEY);
     if (!storedValue) return defaultSettings;
 
-    const parsed = JSON.parse(storedValue) as Partial<AppSettings> | null;
-    if (!parsed || typeof parsed !== "object") return defaultSettings;
+    const parsed: unknown = JSON.parse(storedValue);
+    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+      return defaultSettings;
+    }
+
+    const explorer = readProperty(parsed, "explorer");
+    const workspace = readProperty(parsed, "workspace");
+    const queryEditor = readProperty(parsed, "queryEditor");
+    const connections = readProperty(parsed, "connections");
 
     return {
       explorer: {
         groupTablesBySchema: readBoolean(
-          parsed.explorer?.groupTablesBySchema,
+          readProperty(explorer, "groupTablesBySchema"),
           defaultSettings.explorer.groupTablesBySchema
         ),
       },
       workspace: {
         persistQueryTabs: readBoolean(
-          parsed.workspace?.persistQueryTabs,
+          readProperty(workspace, "persistQueryTabs"),
           defaultSettings.workspace.persistQueryTabs
         ),
       },
+      queryEditor: {
+        newQueryTemplate: readNewQueryTemplate(
+          readProperty(queryEditor, "newQueryTemplate"),
+          defaultSettings.queryEditor.newQueryTemplate
+        ),
+      },
       connections: {
-        colorProfiles: readColorProfiles(parsed.connections?.colorProfiles),
+        colorProfiles: readColorProfiles(readProperty(connections, "colorProfiles")),
       },
     };
   } catch (cause) {
@@ -92,6 +129,25 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
       workspace: {
         ...current.workspace,
         persistQueryTabs: value,
+      },
+    };
+    const saveError = saveSettings(settings);
+    if (saveError) return saveError;
+    set({ settings });
+    return null;
+  },
+
+  setNewQueryTemplate: (value) => {
+    if (!hasAtMostOneCursorMarker(value)) {
+      return "New query templates can contain at most one {{cursor}} marker.";
+    }
+
+    const current = get().settings;
+    const settings: AppSettings = {
+      ...current,
+      queryEditor: {
+        ...current.queryEditor,
+        newQueryTemplate: value,
       },
     };
     const saveError = saveSettings(settings);
