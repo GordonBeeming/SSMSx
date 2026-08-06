@@ -42,9 +42,6 @@ export function QueryEditor({
   const pendingCursorOffsetRef = useRef(pendingCursorOffset);
   const pendingCursorRequestIdRef = useRef(pendingCursorRequestId);
   const onCursorPositionAppliedRef = useRef(onCursorPositionApplied);
-  pendingCursorOffsetRef.current = pendingCursorOffset;
-  pendingCursorRequestIdRef.current = pendingCursorRequestId;
-  onCursorPositionAppliedRef.current = onCursorPositionApplied;
 
   // Keep latest callbacks in refs so Monaco actions always call the current ones
   const onExecuteRef = useRef(onExecute);
@@ -56,6 +53,12 @@ export function QueryEditor({
       completionProviderRef.current.setMetadata(intellisenseMetadata ?? null);
     }
   }, [intellisenseMetadata]);
+
+  useEffect(() => {
+    pendingCursorOffsetRef.current = pendingCursorOffset;
+    pendingCursorRequestIdRef.current = pendingCursorRequestId;
+    onCursorPositionAppliedRef.current = onCursorPositionApplied;
+  }, [onCursorPositionApplied, pendingCursorOffset, pendingCursorRequestId]);
 
   // Dispose the Monaco completion provider on unmount.
   // registerCompletionItemProvider registers globally on the Monaco module, so

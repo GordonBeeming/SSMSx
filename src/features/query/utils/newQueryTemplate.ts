@@ -5,6 +5,10 @@ export interface ParsedNewQueryTemplate {
   cursorOffset: number;
 }
 
+export function hasAtMostOneCursorMarker(template: string): boolean {
+  return template.indexOf(CURSOR_MARKER) === template.lastIndexOf(CURSOR_MARKER);
+}
+
 /**
  * Removes the optional cursor marker without altering any of the template's
  * remaining whitespace. Offsets are UTF-16 indices, matching Monaco's model API.

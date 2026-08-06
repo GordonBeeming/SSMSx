@@ -1,6 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { parseNewQueryTemplate } from "../../src/features/query/utils/newQueryTemplate.ts";
+import {
+  hasAtMostOneCursorMarker,
+  parseNewQueryTemplate,
+} from "../../src/features/query/utils/newQueryTemplate.ts";
 
 test("preserves whitespace around a cursor marker", () => {
   const template = "  SELECT 1  \n{{cursor}}\n  ";
@@ -33,4 +36,9 @@ test("uses the exact end when no marker is present, including an empty template"
     cursorOffset: 9,
   });
   assert.deepEqual(parseNewQueryTemplate(""), { sql: "", cursorOffset: 0 });
+});
+
+test("rejects templates with more than one cursor marker", () => {
+  assert.equal(hasAtMostOneCursorMarker("{{cursor}} SELECT {{cursor}}"), false);
+  assert.equal(hasAtMostOneCursorMarker("SELECT {{cursor}}"), true);
 });

@@ -117,9 +117,6 @@ test("new query templates preserve whitespace and place the Monaco cursor", asyn
       sql: "SELECT name FROM sys.databases;\n",
     });
 
-    console.log(
-      `New-query screenshot: ${SCREENSHOT_PATH} (960x720); Monaco value observed with cursor insertion at line 2, column 5.`
-    );
   } finally {
     await browser?.close();
     await vite.close();

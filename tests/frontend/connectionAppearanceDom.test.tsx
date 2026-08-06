@@ -713,6 +713,14 @@ describe("SettingsDialog", () => {
       JSON.stringify({ queryEditor: { newQueryTemplate: "" } })
     );
     expect(loadSettings().queryEditor.newQueryTemplate).toBe("");
+
+    window.localStorage.setItem(
+      SETTINGS_STORAGE_KEY,
+      JSON.stringify({ queryEditor: { newQueryTemplate: "{{cursor}} SELECT {{cursor}}" } })
+    );
+    expect(loadSettings().queryEditor.newQueryTemplate).toBe(
+      "\n".repeat(30) + "{{cursor}}"
+    );
   });
 
   it("rejects duplicate markers without changing settings", () => {

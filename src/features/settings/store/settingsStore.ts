@@ -6,6 +6,7 @@ import {
   normalizeCustomColorProfiles,
   validateCustomColorProfile,
 } from "../../../shared/connectionAppearance";
+import { hasAtMostOneCursorMarker } from "../../query/utils/newQueryTemplate";
 
 export const SETTINGS_STORAGE_KEY = "ssmsx.settings";
 export const SAVE_SETTINGS_ERROR =
@@ -29,6 +30,11 @@ function readColorProfiles(value: unknown): CustomColorProfile[] {
 
 function readString(value: unknown, fallback: string): string {
   return typeof value === "string" ? value : fallback;
+}
+
+function readNewQueryTemplate(value: unknown, fallback: string): string {
+  const template = readString(value, fallback);
+  return hasAtMostOneCursorMarker(template) ? template : fallback;
 }
 
 function readProperty(value: unknown, property: string): unknown {
@@ -73,7 +79,7 @@ export function loadSettings(): AppSettings {
         ),
       },
       queryEditor: {
-        newQueryTemplate: readString(
+        newQueryTemplate: readNewQueryTemplate(
           readProperty(queryEditor, "newQueryTemplate"),
           defaultSettings.queryEditor.newQueryTemplate
         ),
@@ -132,8 +138,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   },
 
   setNewQueryTemplate: (value) => {
-    const markerCount = value.split("{{cursor}}").length - 1;
-    if (markerCount > 1) {
+    if (!hasAtMostOneCursorMarker(value)) {
       return "New query templates can contain at most one {{cursor}} marker.";
     }
 
