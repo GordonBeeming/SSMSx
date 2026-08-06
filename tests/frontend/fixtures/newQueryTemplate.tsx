@@ -43,7 +43,7 @@ useConnectionStore.setState({
       authType: "SqlAuth",
       encrypt: "Mandatory",
       trustServerCertificate: false,
-      createdAt: "2026-08-07T00:00:00Z",
+      createdAt: "2026-08-05T00:00:00Z",
     },
   ],
   activeConnectionIds: [CONNECTION_ID],
