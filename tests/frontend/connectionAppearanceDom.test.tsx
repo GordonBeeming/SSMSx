@@ -5,7 +5,11 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { ConnectionProfilesPanel } from "../../src/features/settings/components/ConnectionProfilesPanel";
 import { SettingsDialog } from "../../src/features/settings/components/SettingsDialog";
-import { useSettingsStore } from "../../src/features/settings/store/settingsStore";
+import {
+  loadSettings,
+  SETTINGS_STORAGE_KEY,
+  useSettingsStore,
+} from "../../src/features/settings/store/settingsStore";
 import { useConnectionStore } from "../../src/features/connection/store/connectionStore";
 import { ColorProfileCombobox } from "../../src/shared/components/ColorProfileCombobox";
 import { ConfirmDialog } from "../../src/shared/components/ConfirmDialog";
@@ -53,6 +57,7 @@ function resetStores(profiles: CustomColorProfile[] = []) {
     settings: {
       explorer: { groupTablesBySchema: true },
       workspace: { persistQueryTabs: true },
+      queryEditor: { newQueryTemplate: "\n".repeat(30) + "{{cursor}}" },
       connections: { colorProfiles: profiles },
     },
   });
@@ -685,6 +690,86 @@ describe("SettingsDialog", () => {
         .getByRole("button", { name: "Connections" })
         .getAttribute("aria-current")
     ).toBe("page");
+  });
+
+  it("migrates missing or non-string templates while preserving exact string values", () => {
+    window.localStorage.setItem(
+      SETTINGS_STORAGE_KEY,
+      JSON.stringify({ queryEditor: { newQueryTemplate: null } })
+    );
+    expect(loadSettings().queryEditor.newQueryTemplate).toBe(
+      "\n".repeat(30) + "{{cursor}}"
+    );
+
+    const whitespaceTemplate = "  SELECT 1;  \n\n";
+    window.localStorage.setItem(
+      SETTINGS_STORAGE_KEY,
+      JSON.stringify({ queryEditor: { newQueryTemplate: whitespaceTemplate } })
+    );
+    expect(loadSettings().queryEditor.newQueryTemplate).toBe(whitespaceTemplate);
+
+    window.localStorage.setItem(
+      SETTINGS_STORAGE_KEY,
+      JSON.stringify({ queryEditor: { newQueryTemplate: "" } })
+    );
+    expect(loadSettings().queryEditor.newQueryTemplate).toBe("");
+  });
+
+  it("rejects duplicate markers without changing settings", () => {
+    const originalTemplate = useSettingsStore.getState().settings.queryEditor.newQueryTemplate;
+    const setNewQueryTemplate = useSettingsStore.getState().setNewQueryTemplate;
+
+    expect(setNewQueryTemplate("{{cursor}} SELECT {{cursor}}")).toContain(
+      "at most one"
+    );
+    expect(useSettingsStore.getState().settings.queryEditor.newQueryTemplate).toBe(
+      originalTemplate
+    );
+  });
+
+  it("keeps the template unchanged when saving fails", () => {
+    const originalTemplate = useSettingsStore.getState().settings.queryEditor.newQueryTemplate;
+    vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+      throw new DOMException("Storage is unavailable", "QuotaExceededError");
+    });
+
+    expect(useSettingsStore.getState().setNewQueryTemplate("SELECT 1;")).toContain(
+      "Could not save settings"
+    );
+    expect(useSettingsStore.getState().settings.queryEditor.newQueryTemplate).toBe(
+      originalTemplate
+    );
+  });
+
+  it("edits the accessible template textarea without normalizing its content", () => {
+    render(<SettingsDialog open onClose={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: "Query Editor" }));
+    const textarea = screen.getByRole("textbox", { name: "New query template" });
+    const template = "  SELECT 1;  \n\n";
+
+    fireEvent.change(textarea, { target: { value: template } });
+
+    expect((textarea as HTMLTextAreaElement).value).toBe(template);
+    expect(useSettingsStore.getState().settings.queryEditor.newQueryTemplate).toBe(
+      template
+    );
+  });
+
+  it("shows template validation and storage errors in the settings alert", () => {
+    render(<SettingsDialog open onClose={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: "Query Editor" }));
+    const textarea = screen.getByRole("textbox", { name: "New query template" });
+
+    fireEvent.change(textarea, { target: { value: "{{cursor}}{{cursor}}" } });
+    expect(screen.getByRole("alert").textContent).toContain("at most one");
+
+    vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+      throw new DOMException("Storage is unavailable", "QuotaExceededError");
+    });
+    fireEvent.change(textarea, { target: { value: "SELECT 1;" } });
+    expect(screen.getByRole("alert").textContent).toContain(
+      "Could not save settings"
+    );
   });
 });
 

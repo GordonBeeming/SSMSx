@@ -7,6 +7,9 @@ export const defaultSettings: AppSettings = {
   workspace: {
     persistQueryTabs: true,
   },
+  queryEditor: {
+    newQueryTemplate: "\n".repeat(30) + "{{cursor}}",
+  },
   connections: {
     colorProfiles: [],
   },
@@ -32,5 +35,15 @@ export const settingsSchema: SettingDefinition[] = [
     keywords: ["query", "queries", "tabs", "restore", "startup", "session", "workspace"],
     type: "boolean",
     defaultValue: defaultSettings.workspace.persistQueryTabs,
+  },
+  {
+    id: "queryEditor.newQueryTemplate",
+    category: "Query Editor",
+    title: "New query template",
+    description:
+      "New queries insert this content exactly as written. Use the optional {{cursor}} marker to place the cursor.",
+    keywords: ["query", "new query", "template", "cursor", "whitespace", "editor"],
+    type: "template",
+    defaultValue: defaultSettings.queryEditor.newQueryTemplate,
   },
 ];

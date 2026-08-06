@@ -9,6 +9,9 @@ interface QueryEditorProps {
   value: string;
   onChange: (value: string) => void;
   onExecute: (sql: string) => void;
+  pendingCursorRequestId?: string;
+  pendingCursorOffset?: number;
+  onCursorPositionApplied?: () => void;
   intellisenseMetadata?: IntelliSenseMetadata | null;
   gutterBackground?: string;
   gutterForeground?: string;
@@ -23,6 +26,9 @@ export function QueryEditor({
   value,
   onChange,
   onExecute,
+  pendingCursorRequestId,
+  pendingCursorOffset,
+  onCursorPositionApplied,
   intellisenseMetadata,
   gutterBackground,
   gutterForeground,
@@ -32,6 +38,13 @@ export function QueryEditor({
   const disposableRef = useRef<IDisposable | null>(null);
   const monacoRef = useRef<Monaco | null>(null);
   const theme = useAppEditorTheme();
+  const appliedCursorRequestIdRef = useRef<string | null>(null);
+  const pendingCursorOffsetRef = useRef(pendingCursorOffset);
+  const pendingCursorRequestIdRef = useRef(pendingCursorRequestId);
+  const onCursorPositionAppliedRef = useRef(onCursorPositionApplied);
+  pendingCursorOffsetRef.current = pendingCursorOffset;
+  pendingCursorRequestIdRef.current = pendingCursorRequestId;
+  onCursorPositionAppliedRef.current = onCursorPositionApplied;
 
   // Keep latest callbacks in refs so Monaco actions always call the current ones
   const onExecuteRef = useRef(onExecute);
@@ -55,6 +68,33 @@ export function QueryEditor({
     };
   }, []);
 
+  const applyPendingCursorPosition = useCallback(() => {
+    const requestId = pendingCursorRequestIdRef.current;
+    const offset = pendingCursorOffsetRef.current;
+    if (
+      requestId === undefined ||
+      offset === undefined ||
+      appliedCursorRequestIdRef.current === requestId
+    ) {
+      return;
+    }
+
+    const editor = editorRef.current;
+    const model = editor?.getModel();
+    if (!editor || !model) return;
+
+    const position = model.getPositionAt(offset);
+    editor.focus();
+    editor.setPosition(position);
+    editor.revealPositionInCenter(position);
+    appliedCursorRequestIdRef.current = requestId;
+    onCursorPositionAppliedRef.current?.();
+  }, []);
+
+  useEffect(() => {
+    applyPendingCursorPosition();
+  }, [applyPendingCursorPosition, pendingCursorOffset, pendingCursorRequestId]);
+
   // Listen for toolbar Execute; Monaco owns the current selection.
   useEffect(() => {
     const handler = () => {
@@ -70,6 +110,7 @@ export function QueryEditor({
     (editor, monaco) => {
       editorRef.current = editor;
       monacoRef.current = monaco;
+      applyPendingCursorPosition();
 
       // Register SQL completion provider (once per editor)
       const provider = new SqlCompletionProvider();
@@ -106,7 +147,7 @@ export function QueryEditor({
     },
     // Only depends on initial intellisenseMetadata — refs handle callback updates
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [intellisenseMetadata]
+    [applyPendingCursorPosition, intellisenseMetadata]
   );
 
   const handleChange = useCallback(

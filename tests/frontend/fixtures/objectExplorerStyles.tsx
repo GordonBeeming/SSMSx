@@ -26,6 +26,7 @@ useSettingsStore.setState({
   settings: {
     explorer: { groupTablesBySchema: true },
     workspace: { persistQueryTabs: true },
+    queryEditor: { newQueryTemplate: "\n".repeat(30) + "{{cursor}}" },
     connections: { colorProfiles: [nightProfile, boundaryProfile] },
   },
 });

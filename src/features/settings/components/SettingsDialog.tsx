@@ -26,13 +26,16 @@ export function SettingsDialog({ open: isOpen, onClose }: SettingsDialogProps) {
   const searchRef = useRef<HTMLInputElement>(null);
   const [searchText, setSearchText] = useState("");
   const [activeCategory, setActiveCategory] = useState("Object Explorer");
-  const [storageError, setStorageError] = useState<string | null>(null);
+  const [settingsError, setSettingsError] = useState<string | null>(null);
   const settings = useSettingsStore((state) => state.settings);
   const setGroupTablesBySchema = useSettingsStore(
     (state) => state.setGroupTablesBySchema
   );
   const setPersistQueryTabs = useSettingsStore(
     (state) => state.setPersistQueryTabs
+  );
+  const setNewQueryTemplate = useSettingsStore(
+    (state) => state.setNewQueryTemplate
   );
 
   useEffect(() => {
@@ -118,7 +121,11 @@ export function SettingsDialog({ open: isOpen, onClose }: SettingsDialogProps) {
         : settingId === "workspace.persistQueryTabs"
           ? setPersistQueryTabs(value)
           : null;
-    setStorageError(saveError);
+    setSettingsError(saveError);
+  };
+
+  const updateTemplate = (value: string): void => {
+    setSettingsError(setNewQueryTemplate(value));
   };
 
   return (
@@ -211,25 +218,36 @@ export function SettingsDialog({ open: isOpen, onClose }: SettingsDialogProps) {
                       </p>
                     </div>
 
-                    <label className="flex cursor-pointer items-center gap-2 rounded border border-bg-tertiary bg-bg-input px-3 py-2 text-sm text-text-primary hover:bg-bg-secondary">
-                      <input
-                        type="checkbox"
-                        checked={isSettingEnabled(setting.id)}
-                        onChange={(event) =>
-                          updateSetting(setting.id, event.target.checked)
-                        }
-                        className="h-4 w-4 accent-accent"
+                    {setting.type === "boolean" ? (
+                      <label className="flex cursor-pointer items-center gap-2 rounded border border-bg-tertiary bg-bg-input px-3 py-2 text-sm text-text-primary hover:bg-bg-secondary">
+                        <input
+                          type="checkbox"
+                          checked={isSettingEnabled(setting.id)}
+                          onChange={(event) =>
+                            updateSetting(setting.id, event.target.checked)
+                          }
+                          className="h-4 w-4 accent-accent"
+                        />
+                        <span>Enabled</span>
+                      </label>
+                    ) : (
+                      <textarea
+                        aria-label={setting.title}
+                        value={settings.queryEditor.newQueryTemplate}
+                        onChange={(event) => updateTemplate(event.target.value)}
+                        rows={8}
+                        spellCheck={false}
+                        className="min-h-36 w-full resize-y rounded border border-bg-tertiary bg-bg-input px-3 py-2 font-mono text-sm text-text-primary focus:border-accent-hover focus:outline-none focus:ring-1 focus:ring-accent-hover"
                       />
-                      <span>Enabled</span>
-                    </label>
+                    )}
                   </section>
                 ))}
               </div>
             )}
 
-            {storageError && (
+            {settingsError && (
               <p className="mt-4 text-xs text-error" role="alert">
-                {storageError}
+                {settingsError}
               </p>
             )}
           </div>

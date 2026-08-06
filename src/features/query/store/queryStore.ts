@@ -15,7 +15,9 @@ import {
   type IntelliSenseMetadata,
 } from "../api/queryApi";
 import { useConnectionStore } from "../../connection/store/connectionStore";
+import { useSettingsStore } from "../../settings";
 import { normalizeRestoredQueryTab } from "../utils/queryTabs";
+import { parseNewQueryTemplate } from "../utils/newQueryTemplate";
 
 const QUERY_SESSION_STORAGE_KEY = "ssmsx.querySession.v1";
 
@@ -43,6 +45,7 @@ interface QueryState {
   executionInfo: Record<string, TabExecutionInfo>;
   results: Record<string, QueryResult>;
   intellisenseCache: Record<string, IntelliSenseMetadata>;
+  pendingCursorOffsets: Record<string, number>;
 
   // Tab management
   addTab: (tab: QueryTab) => void;
@@ -54,6 +57,7 @@ interface QueryState {
   closeOtherTabs: (tabId: string) => void;
   closeAllTabs: () => void;
   updateTab: (tabId: string, patch: Partial<QueryTab>) => void;
+  consumePendingCursorOffset: (tabId: string) => void;
   saveSession: () => void;
   restoreSavedSession: () => boolean;
   discardSavedSession: () => void;
@@ -193,16 +197,29 @@ export const useQueryStore = create<QueryState>((set, get) => ({
   executionInfo: {},
   results: {},
   intellisenseCache: {},
+  pendingCursorOffsets: {},
 
-  addTab: (tab) =>
+  addTab: (tab) => {
+    const isBlankQuery = tab.kind !== "diagram" && tab.initialSql === undefined;
+    const template = isBlankQuery
+      ? parseNewQueryTemplate(useSettingsStore.getState().settings.queryEditor.newQueryTemplate)
+      : null;
+    const initializedTab = template ? { ...tab, initialSql: template.sql } : tab;
+
     set((state) => ({
-      tabs: [...state.tabs, tab],
-      activeTabId: tab.id,
+      tabs: [...state.tabs, initializedTab],
+      activeTabId: initializedTab.id,
       tabSql: {
         ...state.tabSql,
-        ...(tab.kind === "diagram" ? {} : { [tab.id]: tab.initialSql ?? "" }),
+        ...(initializedTab.kind === "diagram"
+          ? {}
+          : { [initializedTab.id]: initializedTab.initialSql ?? "" }),
       },
-    })),
+      pendingCursorOffsets: template
+        ? { ...state.pendingCursorOffsets, [initializedTab.id]: template.cursorOffset }
+        : state.pendingCursorOffsets,
+    }));
+  },
 
   removeTab: (id) =>
     set((state) => {
@@ -210,11 +227,13 @@ export const useQueryStore = create<QueryState>((set, get) => ({
       const { [id]: _sql, ...restSql } = state.tabSql;
       const { [id]: _exec, ...restExec } = state.executionInfo;
       const { [id]: _res, ...restResults } = state.results;
+      const { [id]: _pendingCursorOffset, ...restPendingCursorOffsets } = state.pendingCursorOffsets;
       return {
         tabs,
         tabSql: restSql,
         executionInfo: restExec,
         results: restResults,
+        pendingCursorOffsets: restPendingCursorOffsets,
         activeTabId:
           state.activeTabId === id
             ? tabs.length > 0
@@ -222,6 +241,12 @@ export const useQueryStore = create<QueryState>((set, get) => ({
               : null
             : state.activeTabId,
       };
+    }),
+
+  consumePendingCursorOffset: (tabId) =>
+    set((state) => {
+      const { [tabId]: _pendingCursorOffset, ...pendingCursorOffsets } = state.pendingCursorOffsets;
+      return { pendingCursorOffsets };
     }),
 
   setActiveTab: (id) => set({ activeTabId: id }),
@@ -273,10 +298,12 @@ export const useQueryStore = create<QueryState>((set, get) => ({
       const tabSql = { ...state.tabSql };
       const executionInfo = { ...state.executionInfo };
       const results = { ...state.results };
+      const pendingCursorOffsets = { ...state.pendingCursorOffsets };
       for (const id of removedIds) {
         delete tabSql[id];
         delete executionInfo[id];
         delete results[id];
+        delete pendingCursorOffsets[id];
       }
 
       return {
@@ -285,6 +312,7 @@ export const useQueryStore = create<QueryState>((set, get) => ({
         tabSql,
         executionInfo,
         results,
+        pendingCursorOffsets,
       };
     }),
 
@@ -295,6 +323,7 @@ export const useQueryStore = create<QueryState>((set, get) => ({
       tabSql: {},
       executionInfo: {},
       results: {},
+      pendingCursorOffsets: {},
     }),
 
   saveSession: () => {
@@ -350,6 +379,7 @@ export const useQueryStore = create<QueryState>((set, get) => ({
       tabSql,
       executionInfo: {},
       results: {},
+      pendingCursorOffsets: {},
     });
 
     return true;
