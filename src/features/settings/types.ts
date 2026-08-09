@@ -33,6 +33,7 @@ export interface AppSettings {
   };
   queryEditor: {
     newQueryTemplate: string;
+    newQueryTemplateMigrationVersion: number;
   };
   connections: {
     colorProfiles: CustomColorProfile[];

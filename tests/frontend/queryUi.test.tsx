@@ -88,7 +88,10 @@ function resetStores() {
     settings: {
       explorer: { groupTablesBySchema: true },
       workspace: { persistQueryTabs: true },
-      queryEditor: { newQueryTemplate: "\n{{cursor}}\n" },
+      queryEditor: {
+        newQueryTemplate: "\n{{cursor}}\n",
+        newQueryTemplateMigrationVersion: 1,
+      },
       connections: { colorProfiles: [nightProfile] },
     },
   });

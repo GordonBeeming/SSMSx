@@ -3,6 +3,7 @@ import type { AppSettings, CustomColorProfile } from "../types";
 import {
   defaultSettings,
   LEGACY_DEFAULT_NEW_QUERY_TEMPLATE,
+  NEW_QUERY_TEMPLATE_MIGRATION_VERSION,
 } from "../settingsSchema";
 import {
   BUILT_IN_COLOR_PROFILES,
@@ -35,9 +36,24 @@ function readString(value: unknown, fallback: string): string {
   return typeof value === "string" ? value : fallback;
 }
 
-function readNewQueryTemplate(value: unknown, fallback: string): string {
+function readMigrationVersion(value: unknown): number {
+  return typeof value === "number" && Number.isInteger(value) && value >= 0
+    ? value
+    : 0;
+}
+
+function readNewQueryTemplate(
+  value: unknown,
+  fallback: string,
+  migrationVersion: number
+): string {
   const template = readString(value, fallback);
-  if (template === LEGACY_DEFAULT_NEW_QUERY_TEMPLATE) return fallback;
+  if (
+    migrationVersion < NEW_QUERY_TEMPLATE_MIGRATION_VERSION &&
+    template === LEGACY_DEFAULT_NEW_QUERY_TEMPLATE
+  ) {
+    return fallback;
+  }
   return hasAtMostOneCursorMarker(template) ? template : fallback;
 }
 
@@ -68,8 +84,11 @@ export function loadSettings(): AppSettings {
     const workspace = readProperty(parsed, "workspace");
     const queryEditor = readProperty(parsed, "queryEditor");
     const connections = readProperty(parsed, "connections");
+    const migrationVersion = readMigrationVersion(
+      readProperty(queryEditor, "newQueryTemplateMigrationVersion")
+    );
 
-    return {
+    const settings: AppSettings = {
       explorer: {
         groupTablesBySchema: readBoolean(
           readProperty(explorer, "groupTablesBySchema"),
@@ -85,13 +104,21 @@ export function loadSettings(): AppSettings {
       queryEditor: {
         newQueryTemplate: readNewQueryTemplate(
           readProperty(queryEditor, "newQueryTemplate"),
-          defaultSettings.queryEditor.newQueryTemplate
+          defaultSettings.queryEditor.newQueryTemplate,
+          migrationVersion
         ),
+        newQueryTemplateMigrationVersion: NEW_QUERY_TEMPLATE_MIGRATION_VERSION,
       },
       connections: {
         colorProfiles: readColorProfiles(readProperty(connections, "colorProfiles")),
       },
     };
+
+    if (migrationVersion < NEW_QUERY_TEMPLATE_MIGRATION_VERSION) {
+      saveSettings(settings);
+    }
+
+    return settings;
   } catch (cause) {
     console.warn("Failed to load settings:", cause);
     return defaultSettings;

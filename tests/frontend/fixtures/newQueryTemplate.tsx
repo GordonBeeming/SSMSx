@@ -29,7 +29,10 @@ useSettingsStore.setState({
   settings: {
     explorer: { groupTablesBySchema: true },
     workspace: { persistQueryTabs: false },
-    queryEditor: { newQueryTemplate: "\n{{cursor}}\n" },
+    queryEditor: {
+      newQueryTemplate: "\n{{cursor}}\n",
+      newQueryTemplateMigrationVersion: 1,
+    },
     connections: { colorProfiles: [] },
   },
 });

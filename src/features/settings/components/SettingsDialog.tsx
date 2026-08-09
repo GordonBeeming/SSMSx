@@ -53,6 +53,7 @@ function TemplateEditor({ label, value, onChange }: TemplateEditorProps) {
       </div>
       <textarea
         aria-label={label}
+        wrap="off"
         value={value}
         onChange={(event) => onChange(event.target.value)}
         onScroll={(event) => setScrollTop(event.currentTarget.scrollTop)}

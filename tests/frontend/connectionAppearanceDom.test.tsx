@@ -57,7 +57,10 @@ function resetStores(profiles: CustomColorProfile[] = []) {
     settings: {
       explorer: { groupTablesBySchema: true },
       workspace: { persistQueryTabs: true },
-      queryEditor: { newQueryTemplate: "\n{{cursor}}\n" },
+      queryEditor: {
+        newQueryTemplate: "\n{{cursor}}\n",
+        newQueryTemplateMigrationVersion: 1,
+      },
       connections: { colorProfiles: profiles },
     },
   });
@@ -729,6 +732,29 @@ describe("SettingsDialog", () => {
       })
     );
     expect(loadSettings().queryEditor.newQueryTemplate).toBe("\n{{cursor}}\n");
+
+    const storedMigration = JSON.parse(
+      window.localStorage.getItem(SETTINGS_STORAGE_KEY) ?? "{}"
+    );
+    expect(storedMigration.queryEditor).toEqual({
+      newQueryTemplate: "\n{{cursor}}\n",
+      newQueryTemplateMigrationVersion: 1,
+    });
+
+    const migratedSettings = loadSettings();
+    window.localStorage.setItem(
+      SETTINGS_STORAGE_KEY,
+      JSON.stringify({
+        ...migratedSettings,
+        queryEditor: {
+          ...migratedSettings.queryEditor,
+          newQueryTemplate: "\n".repeat(30) + "{{cursor}}",
+        },
+      })
+    );
+    expect(loadSettings().queryEditor.newQueryTemplate).toBe(
+      "\n".repeat(30) + "{{cursor}}"
+    );
   });
 
   it("rejects duplicate markers without changing settings", () => {
@@ -766,6 +792,7 @@ describe("SettingsDialog", () => {
     fireEvent.change(textarea, { target: { value: template } });
 
     expect((textarea as HTMLTextAreaElement).value).toBe(template);
+    expect((textarea as HTMLTextAreaElement).wrap).toBe("off");
     expect(
       screen.getByTestId("new-query-template-line-numbers").textContent
     ).toContain("1\n2\n3");
