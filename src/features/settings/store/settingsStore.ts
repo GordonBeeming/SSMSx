@@ -70,6 +70,33 @@ function readProperty(value: unknown, property: string): unknown {
   return Reflect.get(value, property);
 }
 
+function saveNewQueryTemplateMigration(
+  storedSettings: object,
+  storedQueryEditor: unknown,
+  queryEditor: AppSettings["queryEditor"]
+): void {
+  try {
+    const existingQueryEditor =
+      typeof storedQueryEditor === "object" &&
+      storedQueryEditor !== null &&
+      !Array.isArray(storedQueryEditor)
+        ? storedQueryEditor
+        : {};
+    window.localStorage.setItem(
+      SETTINGS_STORAGE_KEY,
+      JSON.stringify({
+        ...storedSettings,
+        queryEditor: {
+          ...existingQueryEditor,
+          ...queryEditor,
+        },
+      })
+    );
+  } catch (cause) {
+    console.error("Failed to save settings:", cause);
+  }
+}
+
 export function loadSettings(): AppSettings {
   try {
     const storedValue = window.localStorage.getItem(SETTINGS_STORAGE_KEY);
@@ -119,7 +146,7 @@ export function loadSettings(): AppSettings {
     };
 
     if (migrationVersion < NEW_QUERY_TEMPLATE_MIGRATION_VERSION) {
-      saveSettings(settings);
+      saveNewQueryTemplateMigration(parsed, queryEditor, settings.queryEditor);
     }
 
     return settings;

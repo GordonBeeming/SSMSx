@@ -728,7 +728,11 @@ describe("SettingsDialog", () => {
     window.localStorage.setItem(
       SETTINGS_STORAGE_KEY,
       JSON.stringify({
-        queryEditor: { newQueryTemplate: "\n".repeat(30) + "{{cursor}}" },
+        futureSetting: { enabled: true },
+        queryEditor: {
+          futureQueryEditorSetting: "keep this",
+          newQueryTemplate: "\n".repeat(30) + "{{cursor}}",
+        },
       })
     );
     expect(loadSettings().queryEditor.newQueryTemplate).toBe("\n{{cursor}}\n");
@@ -737,9 +741,11 @@ describe("SettingsDialog", () => {
       window.localStorage.getItem(SETTINGS_STORAGE_KEY) ?? "{}"
     );
     expect(storedMigration.queryEditor).toEqual({
+      futureQueryEditorSetting: "keep this",
       newQueryTemplate: "\n{{cursor}}\n",
       newQueryTemplateMigrationVersion: 1,
     });
+    expect(storedMigration.futureSetting).toEqual({ enabled: true });
 
     const migratedSettings = loadSettings();
     window.localStorage.setItem(
