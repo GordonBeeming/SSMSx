@@ -14,12 +14,12 @@ test("preserves whitespace around a cursor marker", () => {
   });
 });
 
-test("places the default template cursor on line 31", () => {
-  const template = "\n".repeat(30) + "{{cursor}}";
+test("places the default template cursor on line 2 of 3", () => {
+  const template = "\n{{cursor}}\n";
 
   assert.deepEqual(parseNewQueryTemplate(template), {
-    sql: "\n".repeat(30),
-    cursorOffset: 30,
+    sql: "\n\n",
+    cursorOffset: 1,
   });
 });
 

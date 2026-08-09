@@ -1,6 +1,9 @@
 import { create } from "zustand";
 import type { AppSettings, CustomColorProfile } from "../types";
-import { defaultSettings } from "../settingsSchema";
+import {
+  defaultSettings,
+  LEGACY_DEFAULT_NEW_QUERY_TEMPLATE,
+} from "../settingsSchema";
 import {
   BUILT_IN_COLOR_PROFILES,
   normalizeCustomColorProfiles,
@@ -34,6 +37,7 @@ function readString(value: unknown, fallback: string): string {
 
 function readNewQueryTemplate(value: unknown, fallback: string): string {
   const template = readString(value, fallback);
+  if (template === LEGACY_DEFAULT_NEW_QUERY_TEMPLATE) return fallback;
   return hasAtMostOneCursorMarker(template) ? template : fallback;
 }
 

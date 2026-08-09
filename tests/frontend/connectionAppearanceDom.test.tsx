@@ -57,7 +57,7 @@ function resetStores(profiles: CustomColorProfile[] = []) {
     settings: {
       explorer: { groupTablesBySchema: true },
       workspace: { persistQueryTabs: true },
-      queryEditor: { newQueryTemplate: "\n".repeat(30) + "{{cursor}}" },
+      queryEditor: { newQueryTemplate: "\n{{cursor}}\n" },
       connections: { colorProfiles: profiles },
     },
   });
@@ -698,7 +698,7 @@ describe("SettingsDialog", () => {
       JSON.stringify({ queryEditor: { newQueryTemplate: null } })
     );
     expect(loadSettings().queryEditor.newQueryTemplate).toBe(
-      "\n".repeat(30) + "{{cursor}}"
+      "\n{{cursor}}\n"
     );
 
     const whitespaceTemplate = "  SELECT 1;  \n\n";
@@ -719,8 +719,16 @@ describe("SettingsDialog", () => {
       JSON.stringify({ queryEditor: { newQueryTemplate: "{{cursor}} SELECT {{cursor}}" } })
     );
     expect(loadSettings().queryEditor.newQueryTemplate).toBe(
-      "\n".repeat(30) + "{{cursor}}"
+      "\n{{cursor}}\n"
     );
+
+    window.localStorage.setItem(
+      SETTINGS_STORAGE_KEY,
+      JSON.stringify({
+        queryEditor: { newQueryTemplate: "\n".repeat(30) + "{{cursor}}" },
+      })
+    );
+    expect(loadSettings().queryEditor.newQueryTemplate).toBe("\n{{cursor}}\n");
   });
 
   it("rejects duplicate markers without changing settings", () => {
@@ -758,6 +766,9 @@ describe("SettingsDialog", () => {
     fireEvent.change(textarea, { target: { value: template } });
 
     expect((textarea as HTMLTextAreaElement).value).toBe(template);
+    expect(
+      screen.getByTestId("new-query-template-line-numbers").textContent
+    ).toContain("1\n2\n3");
     expect(useSettingsStore.getState().settings.queryEditor.newQueryTemplate).toBe(
       template
     );

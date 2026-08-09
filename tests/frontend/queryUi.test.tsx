@@ -88,7 +88,7 @@ function resetStores() {
     settings: {
       explorer: { groupTablesBySchema: true },
       workspace: { persistQueryTabs: true },
-      queryEditor: { newQueryTemplate: "\n".repeat(30) + "{{cursor}}" },
+      queryEditor: { newQueryTemplate: "\n{{cursor}}\n" },
       connections: { colorProfiles: [nightProfile] },
     },
   });
@@ -513,6 +513,24 @@ describe("query results layout and resizing", () => {
     fireEvent.keyDown(separator, { key: "ArrowRight" });
     expect(column?.style.width).toBe("500px");
     expect(separator.getAttribute("aria-valuenow")).toBe("500");
+  });
+
+  it("selects only the message text with Command+A", () => {
+    render(<QueryResultsTable result={result} profile={nightProfile} tabId="query" />);
+    const messagesTab = screen.getByRole("button", { name: "Messages (1)" });
+    fireEvent.click(messagesTab);
+    messagesTab.focus();
+
+    const keyDown = new KeyboardEvent("keydown", {
+      key: "a",
+      metaKey: true,
+      bubbles: true,
+      cancelable: true,
+    });
+    messagesTab.dispatchEvent(keyDown);
+
+    expect(keyDown.defaultPrevented).toBe(true);
+    expect(window.getSelection()?.toString()).toBe("Completed");
   });
 
   it("cleans up a pointer resize when the result table unmounts", () => {

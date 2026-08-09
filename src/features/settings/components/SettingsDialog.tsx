@@ -10,6 +10,12 @@ interface SettingsDialogProps {
   onClose: () => void;
 }
 
+interface TemplateEditorProps {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+}
+
 const CONNECTION_SEARCH_TERMS = [
   "connection",
   "connections",
@@ -20,6 +26,43 @@ const CONNECTION_SEARCH_TERMS = [
   "profile",
   "profiles",
 ];
+
+function TemplateEditor({ label, value, onChange }: TemplateEditorProps) {
+  const [scrollTop, setScrollTop] = useState(0);
+  const lineNumbers = useMemo(
+    () =>
+      Array.from({ length: value.split("\n").length }, (_, index) => index + 1).join(
+        "\n"
+      ),
+    [value]
+  );
+
+  return (
+    <div className="grid min-h-36 w-full grid-cols-[3rem_minmax(0,1fr)] overflow-hidden rounded border border-bg-tertiary bg-bg-input focus-within:border-accent-hover focus-within:ring-1 focus-within:ring-accent-hover">
+      <div
+        aria-hidden="true"
+        data-testid="new-query-template-line-numbers"
+        className="relative overflow-hidden border-r border-bg-tertiary bg-bg-secondary font-mono text-xs leading-5 text-text-secondary"
+      >
+        <pre
+          className="m-0 select-none px-2 py-2 text-right font-mono leading-5"
+          style={{ transform: `translateY(-${scrollTop}px)` }}
+        >
+          {lineNumbers}
+        </pre>
+      </div>
+      <textarea
+        aria-label={label}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        onScroll={(event) => setScrollTop(event.currentTarget.scrollTop)}
+        rows={8}
+        spellCheck={false}
+        className="min-h-36 w-full resize-y border-0 bg-bg-input px-3 py-2 font-mono text-sm leading-5 text-text-primary focus:outline-none"
+      />
+    </div>
+  );
+}
 
 export function SettingsDialog({ open: isOpen, onClose }: SettingsDialogProps) {
   const dialogRef = useRef<HTMLDialogElement>(null);
@@ -231,13 +274,10 @@ export function SettingsDialog({ open: isOpen, onClose }: SettingsDialogProps) {
                         <span>Enabled</span>
                       </label>
                     ) : (
-                      <textarea
-                        aria-label={setting.title}
+                      <TemplateEditor
+                        label={setting.title}
                         value={settings.queryEditor.newQueryTemplate}
-                        onChange={(event) => updateTemplate(event.target.value)}
-                        rows={8}
-                        spellCheck={false}
-                        className="min-h-36 w-full resize-y rounded border border-bg-tertiary bg-bg-input px-3 py-2 font-mono text-sm text-text-primary focus:border-accent-hover focus:outline-none focus:ring-1 focus:ring-accent-hover"
+                        onChange={updateTemplate}
                       />
                     )}
                   </section>

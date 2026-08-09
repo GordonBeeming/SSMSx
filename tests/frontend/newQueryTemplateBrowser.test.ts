@@ -12,6 +12,7 @@ const TEMPLATE = "  BEGIN TRANSACTION;\n    {{cursor}}SELECT 1;\nCOMMIT;  \n";
 const PROCESSED_TEMPLATE = "  BEGIN TRANSACTION;\n    SELECT 1;\nCOMMIT;  \n";
 const CURSOR_SENTINEL = "/* here */";
 const SCREENSHOT_PATH = join(tmpdir(), "ssmsx-new-query-template-browser.png");
+const MESSAGES_SCREENSHOT_PATH = join(tmpdir(), "ssmsx-query-messages-select-all.png");
 
 interface FixtureWindow extends Window {
   ssmsxNewQueryTemplateFixture?: {
@@ -19,10 +20,11 @@ interface FixtureWindow extends Window {
     getActiveTab: () => { initialSql?: string; title: string } | undefined;
     getActiveSql: () => string;
     isActiveTabDirty: () => boolean;
+    showMessages: () => void;
   };
 }
 
-test("new query templates preserve whitespace and place the Monaco cursor", async () => {
+test("query acceptance preserves template whitespace and scopes message selection", async () => {
   const vite = await createServer({
     configFile: false,
     root: process.cwd(),
@@ -46,7 +48,23 @@ test("new query templates preserve whitespace and place the Monaco cursor", asyn
     await page.getByRole("button", { name: "Query Editor" }).click();
     const templateControl = page.getByRole("textbox", { name: "New query template" });
     await templateControl.waitFor();
+
+    assert.equal(await templateControl.inputValue(), "\n{{cursor}}\n");
+    const lineNumbers = page.getByTestId("new-query-template-line-numbers");
+    assert.equal(await lineNumbers.innerText(), "1\n2\n3");
+
+    const dialog = page.getByRole("dialog");
+    const dialogBox = await dialog.boundingBox();
+    const controlBox = await templateControl.boundingBox();
+    assert(dialogBox && controlBox);
+    assert.ok(dialogBox.x >= 0 && dialogBox.y >= 0);
+    assert.ok(dialogBox.x + dialogBox.width <= 960 && dialogBox.y + dialogBox.height <= 720);
+    assert.ok(controlBox.width >= 350 && controlBox.height >= 140);
+    await page.screenshot({ path: SCREENSHOT_PATH });
+    assert.ok(existsSync(SCREENSHOT_PATH));
+
     await templateControl.fill(TEMPLATE);
+    assert.equal(await lineNumbers.innerText(), "1\n2\n3\n4");
 
     const storedTemplate = await page.evaluate(() => {
       const raw = window.localStorage.getItem("ssmsx.settings");
@@ -63,16 +81,6 @@ test("new query templates preserve whitespace and place the Monaco cursor", asyn
       return typeof template === "string" ? template : null;
     });
     assert.equal(storedTemplate, TEMPLATE);
-
-    const dialog = page.getByRole("dialog");
-    const dialogBox = await dialog.boundingBox();
-    const controlBox = await templateControl.boundingBox();
-    assert(dialogBox && controlBox);
-    assert.ok(dialogBox.x >= 0 && dialogBox.y >= 0);
-    assert.ok(dialogBox.x + dialogBox.width <= 960 && dialogBox.y + dialogBox.height <= 720);
-    assert.ok(controlBox.width >= 400 && controlBox.height >= 140);
-    await page.screenshot({ path: SCREENSHOT_PATH });
-    assert.ok(existsSync(SCREENSHOT_PATH));
 
     await page.getByRole("button", { name: "Close" }).click();
     await page.getByTitle(/New Query/).click();
@@ -117,6 +125,17 @@ test("new query templates preserve whitespace and place the Monaco cursor", asyn
       sql: "SELECT name FROM sys.databases;\n",
     });
 
+    await page.evaluate(() => {
+      (window as FixtureWindow).ssmsxNewQueryTemplateFixture?.showMessages();
+    });
+    const messages = page.getByRole("region", { name: "Query messages" });
+    await messages.focus();
+    await page.keyboard.press("Meta+a");
+    const selectedText = await page.evaluate(() => window.getSelection()?.toString());
+    assert.equal(selectedText, "Only this query message should be selected.\n");
+    assert.doesNotMatch(selectedText ?? "", /New query template acceptance/);
+    await page.screenshot({ path: MESSAGES_SCREENSHOT_PATH });
+    assert.ok(existsSync(MESSAGES_SCREENSHOT_PATH));
   } finally {
     await browser?.close();
     await vite.close();

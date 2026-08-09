@@ -112,6 +112,7 @@ export function QueryResultsTable({ result, profile, tabId }: QueryResultsTableP
   const [copyStatus, setCopyStatus] = useState<string | null>(null);
   const [columnSizing, setColumnSizing] = useState<ColumnSizing | null>(null);
   const gridRef = useRef<HTMLDivElement>(null);
+  const messagesRef = useRef<HTMLDivElement>(null);
   const resizeCleanupRef = useRef<(() => void) | null>(null);
   // Read inside the per-cell onMouseEnter handler; a ref avoids re-subscribing
   // every cell on each drag-state change.
@@ -402,6 +403,30 @@ export function QueryResultsTable({ result, profile, tabId }: QueryResultsTableP
     ]
   );
 
+  const handleMessagesKeyDown = useCallback(
+    (event: ReactKeyboardEvent<HTMLDivElement>) => {
+      if (
+        activeTab !== "messages" ||
+        !(event.metaKey || event.ctrlKey) ||
+        event.key.toLowerCase() !== "a"
+      ) {
+        return;
+      }
+
+      const messages = messagesRef.current;
+      const selection = window.getSelection();
+      if (!messages || !selection) return;
+
+      event.preventDefault();
+      event.stopPropagation();
+      const range = document.createRange();
+      range.selectNodeContents(messages);
+      selection.removeAllRanges();
+      selection.addRange(range);
+    },
+    [activeTab]
+  );
+
   const handleCellContextMenu = useCallback(
     (event: ReactMouseEvent, rowIndex: number, colIndex: number) => {
       event.preventDefault();
@@ -478,7 +503,10 @@ export function QueryResultsTable({ result, profile, tabId }: QueryResultsTableP
   const scrollEndPadding = <div className="h-6 flex-none" aria-hidden="true" />;
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+    <div
+      className="flex min-h-0 flex-1 flex-col overflow-hidden"
+      onKeyDown={handleMessagesKeyDown}
+    >
       {/* Tab header — both tabs are clickable when present */}
       <div
         data-testid="result-tab-strip"
@@ -695,7 +723,13 @@ export function QueryResultsTable({ result, profile, tabId }: QueryResultsTableP
       {/* Messages — select-text re-enables text selection here (body sets
           user-select: none) so message/error text can be selected and copied. */}
       {activeTab === "messages" && hasMessages && (
-        <div className="min-h-0 flex-1 overflow-auto select-text p-2">
+        <div
+          ref={messagesRef}
+          aria-label="Query messages"
+          className="min-h-0 flex-1 overflow-auto select-text p-2 focus-visible:outline focus-visible:outline-1 focus-visible:-outline-offset-1 focus-visible:outline-accent"
+          role="region"
+          tabIndex={0}
+        >
           {result.messages.map((msg, i) => (
             <div
               key={i}
