@@ -518,22 +518,24 @@ describe("query results layout and resizing", () => {
     expect(separator.getAttribute("aria-valuenow")).toBe("500");
   });
 
-  it("selects only the message text with Command+A", () => {
+  it("selects only the message text with Command+A and Control+A", () => {
     render(<QueryResultsTable result={result} profile={nightProfile} tabId="query" />);
     const messagesTab = screen.getByRole("button", { name: "Messages (1)" });
     fireEvent.click(messagesTab);
     messagesTab.focus();
 
-    const keyDown = new KeyboardEvent("keydown", {
-      key: "a",
-      metaKey: true,
-      bubbles: true,
-      cancelable: true,
-    });
-    messagesTab.dispatchEvent(keyDown);
+    for (const modifier of [{ metaKey: true }, { ctrlKey: true }]) {
+      const keyDown = new KeyboardEvent("keydown", {
+        key: "a",
+        ...modifier,
+        bubbles: true,
+        cancelable: true,
+      });
+      messagesTab.dispatchEvent(keyDown);
 
-    expect(keyDown.defaultPrevented).toBe(true);
-    expect(window.getSelection()?.toString()).toBe("Completed");
+      expect(keyDown.defaultPrevented).toBe(true);
+      expect(window.getSelection()?.toString()).toBe("Completed");
+    }
   });
 
   it("cleans up a pointer resize when the result table unmounts", () => {

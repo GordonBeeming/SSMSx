@@ -134,6 +134,10 @@ test("query acceptance preserves template whitespace and scopes message selectio
     const selectedText = await page.evaluate(() => window.getSelection()?.toString());
     assert.equal(selectedText, "Only this query message should be selected.\n");
     assert.doesNotMatch(selectedText ?? "", /New query template acceptance/);
+    await page.keyboard.press("Control+a");
+    const controlSelectedText = await page.evaluate(() => window.getSelection()?.toString());
+    assert.equal(controlSelectedText, "Only this query message should be selected.\n");
+    assert.doesNotMatch(controlSelectedText ?? "", /New query template acceptance/);
     await page.screenshot({ path: MESSAGES_SCREENSHOT_PATH });
     assert.ok(existsSync(MESSAGES_SCREENSHOT_PATH));
   } finally {

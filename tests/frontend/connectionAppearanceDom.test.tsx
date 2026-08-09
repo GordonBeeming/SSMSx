@@ -755,6 +755,18 @@ describe("SettingsDialog", () => {
     expect(loadSettings().queryEditor.newQueryTemplate).toBe(
       "\n".repeat(30) + "{{cursor}}"
     );
+
+    window.localStorage.setItem(
+      SETTINGS_STORAGE_KEY,
+      JSON.stringify({
+        ...migratedSettings,
+        queryEditor: {
+          ...migratedSettings.queryEditor,
+          newQueryTemplateMigrationVersion: 2,
+        },
+      })
+    );
+    expect(loadSettings().queryEditor.newQueryTemplateMigrationVersion).toBe(2);
   });
 
   it("rejects duplicate markers without changing settings", () => {

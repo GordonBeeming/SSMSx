@@ -87,6 +87,10 @@ export function loadSettings(): AppSettings {
     const migrationVersion = readMigrationVersion(
       readProperty(queryEditor, "newQueryTemplateMigrationVersion")
     );
+    const persistedMigrationVersion = Math.max(
+      migrationVersion,
+      NEW_QUERY_TEMPLATE_MIGRATION_VERSION
+    );
 
     const settings: AppSettings = {
       explorer: {
@@ -107,7 +111,7 @@ export function loadSettings(): AppSettings {
           defaultSettings.queryEditor.newQueryTemplate,
           migrationVersion
         ),
-        newQueryTemplateMigrationVersion: NEW_QUERY_TEMPLATE_MIGRATION_VERSION,
+        newQueryTemplateMigrationVersion: persistedMigrationVersion,
       },
       connections: {
         colorProfiles: readColorProfiles(readProperty(connections, "colorProfiles")),
