@@ -57,7 +57,10 @@ function resetStores(profiles: CustomColorProfile[] = []) {
     settings: {
       explorer: { groupTablesBySchema: true },
       workspace: { persistQueryTabs: true },
-      queryEditor: { newQueryTemplate: "\n".repeat(30) + "{{cursor}}" },
+      queryEditor: {
+        newQueryTemplate: "\n{{cursor}}\n",
+        newQueryTemplateMigrationVersion: 1,
+      },
       connections: { colorProfiles: profiles },
     },
   });
@@ -698,7 +701,7 @@ describe("SettingsDialog", () => {
       JSON.stringify({ queryEditor: { newQueryTemplate: null } })
     );
     expect(loadSettings().queryEditor.newQueryTemplate).toBe(
-      "\n".repeat(30) + "{{cursor}}"
+      "\n{{cursor}}\n"
     );
 
     const whitespaceTemplate = "  SELECT 1;  \n\n";
@@ -719,8 +722,57 @@ describe("SettingsDialog", () => {
       JSON.stringify({ queryEditor: { newQueryTemplate: "{{cursor}} SELECT {{cursor}}" } })
     );
     expect(loadSettings().queryEditor.newQueryTemplate).toBe(
+      "\n{{cursor}}\n"
+    );
+
+    window.localStorage.setItem(
+      SETTINGS_STORAGE_KEY,
+      JSON.stringify({
+        futureSetting: { enabled: true },
+        queryEditor: {
+          futureQueryEditorSetting: "keep this",
+          newQueryTemplate: "\n".repeat(30) + "{{cursor}}",
+        },
+      })
+    );
+    expect(loadSettings().queryEditor.newQueryTemplate).toBe("\n{{cursor}}\n");
+
+    const storedMigration = JSON.parse(
+      window.localStorage.getItem(SETTINGS_STORAGE_KEY) ?? "{}"
+    );
+    expect(storedMigration.queryEditor).toEqual({
+      futureQueryEditorSetting: "keep this",
+      newQueryTemplate: "\n{{cursor}}\n",
+      newQueryTemplateMigrationVersion: 1,
+    });
+    expect(storedMigration.futureSetting).toEqual({ enabled: true });
+
+    const migratedSettings = loadSettings();
+    window.localStorage.setItem(
+      SETTINGS_STORAGE_KEY,
+      JSON.stringify({
+        ...migratedSettings,
+        queryEditor: {
+          ...migratedSettings.queryEditor,
+          newQueryTemplate: "\n".repeat(30) + "{{cursor}}",
+        },
+      })
+    );
+    expect(loadSettings().queryEditor.newQueryTemplate).toBe(
       "\n".repeat(30) + "{{cursor}}"
     );
+
+    window.localStorage.setItem(
+      SETTINGS_STORAGE_KEY,
+      JSON.stringify({
+        ...migratedSettings,
+        queryEditor: {
+          ...migratedSettings.queryEditor,
+          newQueryTemplateMigrationVersion: 2,
+        },
+      })
+    );
+    expect(loadSettings().queryEditor.newQueryTemplateMigrationVersion).toBe(2);
   });
 
   it("rejects duplicate markers without changing settings", () => {
@@ -758,6 +810,10 @@ describe("SettingsDialog", () => {
     fireEvent.change(textarea, { target: { value: template } });
 
     expect((textarea as HTMLTextAreaElement).value).toBe(template);
+    expect((textarea as HTMLTextAreaElement).wrap).toBe("off");
+    expect(
+      screen.getByTestId("new-query-template-line-numbers").textContent
+    ).toContain("1\n2\n3");
     expect(useSettingsStore.getState().settings.queryEditor.newQueryTemplate).toBe(
       template
     );

@@ -16,6 +16,7 @@ interface AcceptanceFixture {
   getActiveTab: () => QueryTab | undefined;
   getActiveSql: () => string;
   isActiveTabDirty: () => boolean;
+  showMessages: () => void;
 }
 
 declare global {
@@ -28,7 +29,10 @@ useSettingsStore.setState({
   settings: {
     explorer: { groupTablesBySchema: true },
     workspace: { persistQueryTabs: false },
-    queryEditor: { newQueryTemplate: "\n".repeat(30) + "{{cursor}}" },
+    queryEditor: {
+      newQueryTemplate: "\n{{cursor}}\n",
+      newQueryTemplateMigrationVersion: 1,
+    },
     connections: { colorProfiles: [] },
   },
 });
@@ -89,6 +93,28 @@ function AcceptanceFixtureApp() {
       isActiveTabDirty: () => {
         const state = useQueryStore.getState();
         return state.activeTabId ? state.isTabDirty(state.activeTabId) : false;
+      },
+      showMessages: () => {
+        const state = useQueryStore.getState();
+        if (!state.activeTabId) return;
+        useQueryStore.setState({
+          results: {
+            ...state.results,
+            [state.activeTabId]: {
+              resultSets: [],
+              columns: [],
+              rows: [],
+              messages: [
+                {
+                  text: "Only this query message should be selected.",
+                  severity: "info",
+                },
+              ],
+              executionTimeMs: 1,
+              totalRows: 0,
+            },
+          },
+        });
       },
     };
 

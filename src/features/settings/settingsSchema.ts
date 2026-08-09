@@ -1,5 +1,10 @@
 import type { AppSettings, SettingDefinition } from "./types";
 
+export const DEFAULT_NEW_QUERY_TEMPLATE = "\n{{cursor}}\n";
+export const LEGACY_DEFAULT_NEW_QUERY_TEMPLATE =
+  "\n".repeat(30) + "{{cursor}}";
+export const NEW_QUERY_TEMPLATE_MIGRATION_VERSION = 1;
+
 export const defaultSettings: AppSettings = {
   explorer: {
     groupTablesBySchema: true,
@@ -8,7 +13,8 @@ export const defaultSettings: AppSettings = {
     persistQueryTabs: true,
   },
   queryEditor: {
-    newQueryTemplate: "\n".repeat(30) + "{{cursor}}",
+    newQueryTemplate: DEFAULT_NEW_QUERY_TEMPLATE,
+    newQueryTemplateMigrationVersion: NEW_QUERY_TEMPLATE_MIGRATION_VERSION,
   },
   connections: {
     colorProfiles: [],

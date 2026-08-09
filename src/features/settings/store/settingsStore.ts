@@ -1,6 +1,10 @@
 import { create } from "zustand";
 import type { AppSettings, CustomColorProfile } from "../types";
-import { defaultSettings } from "../settingsSchema";
+import {
+  defaultSettings,
+  LEGACY_DEFAULT_NEW_QUERY_TEMPLATE,
+  NEW_QUERY_TEMPLATE_MIGRATION_VERSION,
+} from "../settingsSchema";
 import {
   BUILT_IN_COLOR_PROFILES,
   normalizeCustomColorProfiles,
@@ -32,8 +36,24 @@ function readString(value: unknown, fallback: string): string {
   return typeof value === "string" ? value : fallback;
 }
 
-function readNewQueryTemplate(value: unknown, fallback: string): string {
+function readMigrationVersion(value: unknown): number {
+  return typeof value === "number" && Number.isInteger(value) && value >= 0
+    ? value
+    : 0;
+}
+
+function readNewQueryTemplate(
+  value: unknown,
+  fallback: string,
+  migrationVersion: number
+): string {
   const template = readString(value, fallback);
+  if (
+    migrationVersion < NEW_QUERY_TEMPLATE_MIGRATION_VERSION &&
+    template === LEGACY_DEFAULT_NEW_QUERY_TEMPLATE
+  ) {
+    return fallback;
+  }
   return hasAtMostOneCursorMarker(template) ? template : fallback;
 }
 
@@ -50,6 +70,33 @@ function readProperty(value: unknown, property: string): unknown {
   return Reflect.get(value, property);
 }
 
+function saveNewQueryTemplateMigration(
+  storedSettings: object,
+  storedQueryEditor: unknown,
+  queryEditor: AppSettings["queryEditor"]
+): void {
+  try {
+    const existingQueryEditor =
+      typeof storedQueryEditor === "object" &&
+      storedQueryEditor !== null &&
+      !Array.isArray(storedQueryEditor)
+        ? storedQueryEditor
+        : {};
+    window.localStorage.setItem(
+      SETTINGS_STORAGE_KEY,
+      JSON.stringify({
+        ...storedSettings,
+        queryEditor: {
+          ...existingQueryEditor,
+          ...queryEditor,
+        },
+      })
+    );
+  } catch (cause) {
+    console.error("Failed to save settings:", cause);
+  }
+}
+
 export function loadSettings(): AppSettings {
   try {
     const storedValue = window.localStorage.getItem(SETTINGS_STORAGE_KEY);
@@ -64,8 +111,15 @@ export function loadSettings(): AppSettings {
     const workspace = readProperty(parsed, "workspace");
     const queryEditor = readProperty(parsed, "queryEditor");
     const connections = readProperty(parsed, "connections");
+    const migrationVersion = readMigrationVersion(
+      readProperty(queryEditor, "newQueryTemplateMigrationVersion")
+    );
+    const persistedMigrationVersion = Math.max(
+      migrationVersion,
+      NEW_QUERY_TEMPLATE_MIGRATION_VERSION
+    );
 
-    return {
+    const settings: AppSettings = {
       explorer: {
         groupTablesBySchema: readBoolean(
           readProperty(explorer, "groupTablesBySchema"),
@@ -81,13 +135,21 @@ export function loadSettings(): AppSettings {
       queryEditor: {
         newQueryTemplate: readNewQueryTemplate(
           readProperty(queryEditor, "newQueryTemplate"),
-          defaultSettings.queryEditor.newQueryTemplate
+          defaultSettings.queryEditor.newQueryTemplate,
+          migrationVersion
         ),
+        newQueryTemplateMigrationVersion: persistedMigrationVersion,
       },
       connections: {
         colorProfiles: readColorProfiles(readProperty(connections, "colorProfiles")),
       },
     };
+
+    if (migrationVersion < NEW_QUERY_TEMPLATE_MIGRATION_VERSION) {
+      saveNewQueryTemplateMigration(parsed, queryEditor, settings.queryEditor);
+    }
+
+    return settings;
   } catch (cause) {
     console.warn("Failed to load settings:", cause);
     return defaultSettings;
