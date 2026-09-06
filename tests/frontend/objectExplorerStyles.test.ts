@@ -1,9 +1,14 @@
 import assert from "node:assert/strict";
+import { mkdtempSync, rmSync } from "node:fs";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
 import test from "node:test";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import { chromium, type Browser } from "@playwright/test";
 import { createServer } from "vite";
+
+const VITE_CACHE_DIR = mkdtempSync(join(tmpdir(), "ssmsx-object-explorer-vite-"));
 
 function relativeLuminance(rgb: number[]): number {
   const channels = rgb.map((value) => {
@@ -32,6 +37,7 @@ test("Object Explorer applies profile styles per subtree without tinting its she
     root: process.cwd(),
     logLevel: "error",
     plugins: [react(), tailwindcss()],
+    cacheDir: VITE_CACHE_DIR,
     server: { host: "127.0.0.1", port: 0 },
   });
   await vite.listen();
@@ -140,5 +146,6 @@ test("Object Explorer applies profile styles per subtree without tinting its she
   } finally {
     await browser?.close();
     await vite.close();
+    rmSync(VITE_CACHE_DIR, { recursive: true, force: true });
   }
 });

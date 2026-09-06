@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { existsSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -13,6 +13,7 @@ const PROCESSED_TEMPLATE = "  BEGIN TRANSACTION;\n    SELECT 1;\nCOMMIT;  \n";
 const CURSOR_SENTINEL = "/* here */";
 const SCREENSHOT_PATH = join(tmpdir(), "ssmsx-new-query-template-browser.png");
 const MESSAGES_SCREENSHOT_PATH = join(tmpdir(), "ssmsx-query-messages-select-all.png");
+const VITE_CACHE_DIR = mkdtempSync(join(tmpdir(), "ssmsx-new-query-template-vite-"));
 
 interface FixtureWindow extends Window {
   ssmsxNewQueryTemplateFixture?: {
@@ -30,6 +31,7 @@ test("query acceptance preserves template whitespace and scopes message selectio
     root: process.cwd(),
     logLevel: "error",
     plugins: [react(), tailwindcss()],
+    cacheDir: VITE_CACHE_DIR,
     server: { host: "127.0.0.1", port: 0 },
   });
   await vite.listen();
@@ -143,5 +145,6 @@ test("query acceptance preserves template whitespace and scopes message selectio
   } finally {
     await browser?.close();
     await vite.close();
+    rmSync(VITE_CACHE_DIR, { recursive: true, force: true });
   }
 });
