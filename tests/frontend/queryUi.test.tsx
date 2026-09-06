@@ -320,6 +320,46 @@ describe("query tab session and profile colours", () => {
     });
   });
 
+  it("retargeting an executing tab drops old execution state and ignores late results", () => {
+    useQueryStore.setState({
+      tabs: [tabs[0]],
+      activeTabId: "unpinned",
+      executionInfo: {
+        unpinned: {
+          state: "executing",
+          queryId: "old-query",
+          requestId: "old-request",
+          startTime: Date.now(),
+        },
+      },
+      results: {
+        unpinned: {
+          columns: ["old"],
+          rows: [["old result"]],
+          resultSets: [],
+          messages: [],
+          executionTimeMs: null,
+          totalRows: 1,
+        },
+      },
+    });
+
+    useQueryStore.getState().updateTab("unpinned", { connectionId: "reporting" });
+    expect(useQueryStore.getState().executionInfo.unpinned).toBeUndefined();
+    expect(useQueryStore.getState().results.unpinned).toBeUndefined();
+
+    useQueryStore.getState().handleResultsBatch({
+      queryId: "old-query",
+      requestId: "old-request",
+      batch: 1,
+      done: true,
+      columns: ["late"],
+      rows: [["late result"]],
+    });
+
+    expect(useQueryStore.getState().results.unpinned).toBeUndefined();
+  });
+
   it("renders wrapping tab bands with both profile colours on active and inactive tabs", () => {
     useConnectionStore.setState({
       connections: [

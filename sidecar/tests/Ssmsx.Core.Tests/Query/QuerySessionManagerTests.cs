@@ -112,7 +112,7 @@ public sealed class QuerySessionManagerTests
     }
 
     [Fact]
-    public async Task BrokenSession_IsEvictedBeforeNextExecution()
+    public async Task BrokenSession_IsUnpublishedBeforeAConcurrentNextExecution()
     {
         var openedConnections = new List<SqlConnection>();
         await using var manager = CreateManager(openedConnections);
@@ -120,9 +120,10 @@ public sealed class QuerySessionManagerTests
         var first = await manager.AcquireAsync("tab-1", "connection-1");
         var firstConnection = first.Connection;
         first.MarkBroken();
-        await first.DisposeAsync();
+        var release = first.DisposeAsync().AsTask();
 
         await using var second = await manager.AcquireAsync("tab-1", "connection-1");
+        await release;
 
         Assert.NotSame(firstConnection, second.Connection);
         Assert.Equal(2, openedConnections.Count);

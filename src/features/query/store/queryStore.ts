@@ -277,18 +277,27 @@ export const useQueryStore = create<QueryState>((set, get) => ({
     }
 
     set((state) => {
+      const currentTab = state.tabs.find((candidate) => candidate.id === tabId);
+      const connectionChanged =
+        patch.connectionId !== undefined &&
+        patch.connectionId !== currentTab?.connectionId;
       const execution = state.executionInfo[tabId];
+      const { [tabId]: _execution, ...executionWithoutRetargetedTab } = state.executionInfo;
+      const { [tabId]: _results, ...resultsWithoutRetargetedTab } = state.results;
       return {
         tabs: state.tabs.map((tab) =>
           tab.id === tabId ? { ...tab, ...patch } : tab
         ),
         executionInfo:
-          patch.database !== undefined && execution?.state === "executing"
+          connectionChanged
+            ? executionWithoutRetargetedTab
+            : patch.database !== undefined && execution?.state === "executing"
             ? {
                 ...state.executionInfo,
                 [tabId]: { ...execution, databaseSyncEnabled: false },
               }
             : state.executionInfo,
+        results: connectionChanged ? resultsWithoutRetargetedTab : state.results,
       };
     });
   },

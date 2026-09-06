@@ -169,9 +169,13 @@ public sealed class QuerySessionManager : IAsyncDisposable
         QuerySession session,
         bool broken)
     {
-        session.EndExecution();
         if (broken)
+        {
+            // Unpublish the broken session before another execution can lease it.
             await RemoveAndDisposeAsync(sessionId, session);
+        }
+
+        session.EndExecution();
     }
 
     private async Task RemoveAndDisposeAsync(string sessionId, QuerySession session)
