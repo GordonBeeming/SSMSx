@@ -8,12 +8,14 @@ interface QueryExecuteResponse {
 
 export async function queryExecute(
   requestId: string,
+  sessionId: string,
   connectionId: string,
   database: string,
   sql: string
 ): Promise<QueryExecuteResponse> {
   const result = await invoke<string>("query_execute", {
     requestId,
+    sessionId,
     connectionId,
     database,
     sql,
@@ -23,6 +25,13 @@ export async function queryExecute(
 
 export async function queryCancel(queryId: string): Promise<void> {
   await invoke<string>("query_cancel", { queryId });
+}
+
+export async function querySessionClose(
+  sessionId: string,
+  connectionId: string
+): Promise<void> {
+  await invoke<string>("query_session_close", { sessionId, connectionId });
 }
 
 export async function onQueryResults(

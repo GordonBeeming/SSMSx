@@ -11,6 +11,7 @@ import type {
 import {
   queryExecute,
   queryCancel,
+  querySessionClose,
   intellisenseGetMetadata,
   type IntelliSenseMetadata,
 } from "../api/queryApi";
@@ -137,6 +138,12 @@ function canUseLocalStorage(): boolean {
   return typeof window !== "undefined" && typeof window.localStorage !== "undefined";
 }
 
+function closeQuerySession(sessionId: string, connectionId: string): void {
+  void querySessionClose(sessionId, connectionId).catch((error) => {
+    console.error(`Failed to close query session for tab '${sessionId}':`, error);
+  });
+}
+
 function readSavedSession(): SavedQuerySession | null {
   if (!canUseLocalStorage()) return null;
 
@@ -221,7 +228,12 @@ export const useQueryStore = create<QueryState>((set, get) => ({
     }));
   },
 
-  removeTab: (id) =>
+  removeTab: (id) => {
+    const tab = get().tabs.find((candidate) => candidate.id === id);
+    if (tab && tab.kind !== "diagram" && tab.connectionId) {
+      closeQuerySession(id, tab.connectionId);
+    }
+
     set((state) => {
       const tabs = state.tabs.filter((t) => t.id !== id);
       const { [id]: _sql, ...restSql } = state.tabSql;
@@ -241,7 +253,8 @@ export const useQueryStore = create<QueryState>((set, get) => ({
               : null
             : state.activeTabId,
       };
-    }),
+    });
+  },
 
   consumePendingCursorOffset: (tabId) =>
     set((state) => {
@@ -251,22 +264,43 @@ export const useQueryStore = create<QueryState>((set, get) => ({
 
   setActiveTab: (id) => set({ activeTabId: id }),
 
-  updateTab: (tabId, patch) =>
+  updateTab: (tabId, patch) => {
+    const tab = get().tabs.find((candidate) => candidate.id === tabId);
+    if (
+      tab &&
+      tab.kind !== "diagram" &&
+      tab.connectionId &&
+      patch.connectionId !== undefined &&
+      patch.connectionId !== tab.connectionId
+    ) {
+      closeQuerySession(tabId, tab.connectionId);
+    }
+
     set((state) => {
+      const currentTab = state.tabs.find((candidate) => candidate.id === tabId);
+      const connectionChanged =
+        patch.connectionId !== undefined &&
+        patch.connectionId !== currentTab?.connectionId;
       const execution = state.executionInfo[tabId];
+      const { [tabId]: _execution, ...executionWithoutRetargetedTab } = state.executionInfo;
+      const { [tabId]: _results, ...resultsWithoutRetargetedTab } = state.results;
       return {
         tabs: state.tabs.map((tab) =>
           tab.id === tabId ? { ...tab, ...patch } : tab
         ),
         executionInfo:
-          patch.database !== undefined && execution?.state === "executing"
+          connectionChanged
+            ? executionWithoutRetargetedTab
+            : patch.database !== undefined && execution?.state === "executing"
             ? {
                 ...state.executionInfo,
                 [tabId]: { ...execution, databaseSyncEnabled: false },
               }
             : state.executionInfo,
+        results: connectionChanged ? resultsWithoutRetargetedTab : state.results,
       };
-    }),
+    });
+  },
 
   updateSql: (tabId, sql) =>
     set((state) => ({
@@ -288,7 +322,14 @@ export const useQueryStore = create<QueryState>((set, get) => ({
       ),
     })),
 
-  closeOtherTabs: (tabId) =>
+  closeOtherTabs: (tabId) => {
+    const removedTabs = get().tabs.filter((tab) => tab.id !== tabId);
+    for (const tab of removedTabs) {
+      if (tab.kind !== "diagram" && tab.connectionId) {
+        closeQuerySession(tab.id, tab.connectionId);
+      }
+    }
+
     set((state) => {
       const kept = state.tabs.filter((t) => t.id === tabId);
       const removedIds = state.tabs
@@ -314,9 +355,16 @@ export const useQueryStore = create<QueryState>((set, get) => ({
         results,
         pendingCursorOffsets,
       };
-    }),
+    });
+  },
 
-  closeAllTabs: () =>
+  closeAllTabs: () => {
+    for (const tab of get().tabs) {
+      if (tab.kind !== "diagram" && tab.connectionId) {
+        closeQuerySession(tab.id, tab.connectionId);
+      }
+    }
+
     set({
       tabs: [],
       activeTabId: null,
@@ -324,7 +372,8 @@ export const useQueryStore = create<QueryState>((set, get) => ({
       executionInfo: {},
       results: {},
       pendingCursorOffsets: {},
-    }),
+    });
+  },
 
   saveSession: () => {
     if (!canUseLocalStorage()) return;
@@ -519,7 +568,7 @@ export const useQueryStore = create<QueryState>((set, get) => ({
     }));
 
     try {
-      await queryExecute(requestId, tab.connectionId, tab.database, queryText);
+      await queryExecute(requestId, tabId, tab.connectionId, tab.database, queryText);
       // requestId is already in executionInfo — no follow-up set needed
     } catch (e) {
       console.error(`Query execution failed for tab '${tabId}':`, e);

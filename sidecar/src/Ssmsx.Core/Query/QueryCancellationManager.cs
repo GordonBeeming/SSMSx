@@ -23,7 +23,8 @@ public class QueryCancellationManager
             throw new ArgumentException("Query ID cannot be null or empty.", nameof(queryId));
         ArgumentNullException.ThrowIfNull(cts);
 
-        _activeQueries[queryId] = new QueryState(cts);
+        if (!_activeQueries.TryAdd(queryId, new QueryState(cts)))
+            throw new InvalidOperationException($"Query '{queryId}' is already registered");
     }
 
     /// <summary>
@@ -40,25 +41,8 @@ public class QueryCancellationManager
             throw new ArgumentException("Query ID cannot be null or empty.", nameof(queryId));
         ArgumentNullException.ThrowIfNull(cmd);
 
-        if (_activeQueries.TryGetValue(queryId, out var entry))
-        {
-            entry.Cmd = cmd;
-
-            // If Cancel() was called before the command was registered, we stored
-            // the intent in Cancelled — apply it now so the query is interrupted
-            // immediately rather than silently running to completion.
-            if (entry.Cancelled)
-            {
-                try
-                {
-                    cmd.Cancel();
-                }
-                catch (Exception ex)
-                {
-                    Console.Error.WriteLine($"Warning: Failed to cancel late-registered SqlCommand for query '{queryId}': {ex.Message}");
-                }
-            }
-        }
+        if (_activeQueries.TryGetValue(queryId, out var entry) && entry.SetCommand(cmd))
+            CancelCommand(queryId, cmd, "late-registered");
     }
 
     /// <summary>
@@ -75,13 +59,12 @@ public class QueryCancellationManager
         if (string.IsNullOrWhiteSpace(queryId))
             return false;
 
-        // Don't remove the entry — SetCommand may still be racing to register the
-        // command. Mark Cancelled so a late SetCommand cancels immediately. The
-        // entry is cleaned up by Remove() when the query actually finishes.
+        // Don't remove the entry: SetCommand may still be racing to register the
+        // command. The entry is cleaned up when the query finishes.
         if (!_activeQueries.TryGetValue(queryId, out var entry))
             return false;
 
-        entry.Cancelled = true;
+        var command = entry.MarkCancelled();
 
         try
         {
@@ -92,21 +75,15 @@ public class QueryCancellationManager
             Console.Error.WriteLine($"Warning: CancellationTokenSource for query '{queryId}' was already disposed: {ex.Message}");
         }
 
-        try
-        {
-            entry.Cmd?.Cancel();
-        }
-        catch (Exception ex)
-        {
-            Console.Error.WriteLine($"Warning: Failed to cancel SqlCommand for query '{queryId}': {ex.Message}");
-        }
+        if (command is not null)
+            CancelCommand(queryId, command, "active");
 
         return true;
     }
 
     /// <summary>
-    /// Removes a query from tracking after it has completed (successfully or otherwise).
-    /// Disposes the CancellationTokenSource.
+    /// Removes a query from tracking after it has completed and disposes its
+    /// cancellation token source.
     /// </summary>
     /// <param name="queryId">The unique identifier for the query to remove.</param>
     public void Remove(string queryId)
@@ -127,20 +104,48 @@ public class QueryCancellationManager
         }
     }
 
+    private static void CancelCommand(string queryId, SqlCommand command, string context)
+    {
+        try
+        {
+            command.Cancel();
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine(
+                $"Warning: Failed to cancel {context} SqlCommand for query '{queryId}': {ex.Message}");
+        }
+    }
+
     private sealed class QueryState
     {
-        public CancellationTokenSource Cts { get; }
-        public SqlCommand? Cmd { get; set; }
-
-        /// <summary>
-        /// Set to true when Cancel() was called. If the SqlCommand arrives
-        /// after this, SetCommand will cancel it immediately.
-        /// </summary>
-        public bool Cancelled { get; set; }
+        private readonly object _gate = new();
+        private SqlCommand? _command;
+        private bool _cancelled;
 
         public QueryState(CancellationTokenSource cts)
         {
             Cts = cts;
+        }
+
+        public CancellationTokenSource Cts { get; }
+
+        public bool SetCommand(SqlCommand command)
+        {
+            lock (_gate)
+            {
+                _command = command;
+                return _cancelled;
+            }
+        }
+
+        public SqlCommand? MarkCancelled()
+        {
+            lock (_gate)
+            {
+                _cancelled = true;
+                return _command;
+            }
         }
     }
 }

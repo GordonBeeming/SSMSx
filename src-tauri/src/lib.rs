@@ -95,6 +95,7 @@ pub fn run() {
             commands::explorer::explorer_database_diagram,
             commands::query::query_execute,
             commands::query::query_cancel,
+            commands::query::query_session_close,
             commands::query::intellisense_get_metadata,
         ])
         .run(tauri::generate_context!())

@@ -1,31 +1,58 @@
 use crate::sidecar::SidecarManager;
 use tauri::Emitter;
 
+const QUERY_EXECUTE_METHOD: &str = "query.execute";
+const QUERY_SESSION_CLOSE_METHOD: &str = "query.sessionClose";
+
+fn query_execute_params(
+    session_id: String,
+    connection_id: String,
+    database: String,
+    sql: String,
+) -> serde_json::Value {
+    serde_json::json!({
+        "sessionId": session_id,
+        "connectionId": connection_id,
+        "database": database,
+        "sql": sql
+    })
+}
+
+fn query_session_close_params(session_id: String, connection_id: String) -> serde_json::Value {
+    serde_json::json!({
+        "sessionId": session_id,
+        "connectionId": connection_id
+    })
+}
+
 #[tauri::command]
 pub async fn query_execute(
     sidecar: tauri::State<'_, SidecarManager>,
     app_handle: tauri::AppHandle,
     request_id: String,
+    session_id: String,
     connection_id: String,
     database: String,
     sql: String,
 ) -> Result<String, String> {
-    let params = serde_json::json!({
-        "connectionId": connection_id,
-        "database": database,
-        "sql": sql
-    });
+    let params = query_execute_params(
+        session_id.clone(),
+        connection_id.clone(),
+        database.clone(),
+        sql,
+    );
 
     // Use the caller-provided request_id so the frontend can store it in
     // state BEFORE invoke returns — otherwise streaming events can arrive
     // before the frontend knows which tab they belong to.
     let (request_id, mut rx) = sidecar
-        .send_streaming_request_with_id("query.execute", Some(params), request_id)
+        .send_streaming_request_with_id(QUERY_EXECUTE_METHOD, Some(params), request_id)
         .await?;
 
     log::debug!(
-        "Query execution started: request_id='{}', connection_id='{}', database='{}'",
+        "Query execution started: request_id='{}', session_id='{}', connection_id='{}', database='{}'",
         request_id,
+        session_id,
         connection_id,
         database
     );
@@ -84,6 +111,29 @@ pub async fn query_execute(
 }
 
 #[tauri::command]
+pub async fn query_session_close(
+    sidecar: tauri::State<'_, SidecarManager>,
+    session_id: String,
+    connection_id: String,
+) -> Result<String, String> {
+    log::debug!(
+        "Closing query session: session_id='{}', connection_id='{}'",
+        session_id,
+        connection_id
+    );
+    let params = query_session_close_params(session_id.clone(), connection_id);
+    let result = sidecar
+        .send_request(QUERY_SESSION_CLOSE_METHOD, Some(params))
+        .await?;
+    serde_json::to_string(&result).map_err(|e| {
+        format!(
+            "Failed to serialize close response for query session '{}': {}",
+            session_id, e
+        )
+    })
+}
+
+#[tauri::command]
 pub async fn intellisense_get_metadata(
     sidecar: tauri::State<'_, SidecarManager>,
     connection_id: String,
@@ -120,4 +170,43 @@ pub async fn query_cancel(
             query_id, e
         )
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        query_execute_params, query_session_close_params, QUERY_EXECUTE_METHOD,
+        QUERY_SESSION_CLOSE_METHOD,
+    };
+
+    #[test]
+    fn query_execute_bridge_includes_the_window_session() {
+        assert_eq!(QUERY_EXECUTE_METHOD, "query.execute");
+        assert_eq!(
+            query_execute_params(
+                "tab-7".into(),
+                "connection-2".into(),
+                "warehouse".into(),
+                "select 1".into(),
+            ),
+            serde_json::json!({
+                "sessionId": "tab-7",
+                "connectionId": "connection-2",
+                "database": "warehouse",
+                "sql": "select 1"
+            })
+        );
+    }
+
+    #[test]
+    fn query_session_close_bridge_uses_the_window_session() {
+        assert_eq!(QUERY_SESSION_CLOSE_METHOD, "query.sessionClose");
+        assert_eq!(
+            query_session_close_params("tab-7".into(), "connection-2".into()),
+            serde_json::json!({
+                "sessionId": "tab-7",
+                "connectionId": "connection-2"
+            })
+        );
+    }
 }

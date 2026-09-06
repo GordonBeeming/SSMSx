@@ -108,7 +108,7 @@ ssmsx/
 
 ```jsonc
 // Request (Rust → C#)
-{"id":"abc-123","method":"query.execute","params":{"connectionId":"conn-1","sql":"SELECT 1"}}
+{"id":"abc-123","method":"query.execute","params":{"sessionId":"tab-1","connectionId":"conn-1","database":"master","sql":"SELECT 1"}}
 
 // Response (C# → Rust)
 {"id":"abc-123","result":{"columns":[""],"rows":[[1]]}}

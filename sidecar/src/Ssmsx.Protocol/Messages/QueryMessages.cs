@@ -5,6 +5,9 @@ namespace Ssmsx.Protocol.Messages;
 
 public record QueryExecuteParams
 {
+    [JsonPropertyName("sessionId")]
+    public required string SessionId { get; init; }
+
     [JsonPropertyName("connectionId")]
     public required string ConnectionId { get; init; }
 
@@ -13,6 +16,15 @@ public record QueryExecuteParams
 
     [JsonPropertyName("sql")]
     public required string Sql { get; init; }
+}
+
+public record QuerySessionCloseParams
+{
+    [JsonPropertyName("sessionId")]
+    public required string SessionId { get; init; }
+
+    [JsonPropertyName("connectionId")]
+    public required string ConnectionId { get; init; }
 }
 
 public record QueryCancelParams
@@ -58,4 +70,10 @@ public record QueryCancelResult
 {
     [JsonPropertyName("cancelled")]
     public bool Cancelled { get; init; }
+}
+
+public record QuerySessionCloseResult
+{
+    [JsonPropertyName("closed")]
+    public bool Closed { get; init; }
 }
