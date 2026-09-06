@@ -85,6 +85,8 @@ namespace Ssmsx.Protocol;
 [JsonSerializable(typeof(QueryExecuteResult))]
 [JsonSerializable(typeof(QueryCancelParams))]
 [JsonSerializable(typeof(QueryCancelResult))]
+[JsonSerializable(typeof(QuerySessionCloseParams))]
+[JsonSerializable(typeof(QuerySessionCloseResult))]
 [JsonSerializable(typeof(List<List<object?>>))]
 [JsonSerializable(typeof(List<object?>))]
 [JsonSerializable(typeof(List<string>))]

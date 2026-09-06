@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { invoke } from "@tauri-apps/api/core";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { QueryResultsTable } from "../../src/features/query/components/QueryResultsTable";
 import { QueryTabBar } from "../../src/features/query/components/QueryTabBar";
@@ -16,6 +17,10 @@ import type { CustomColorProfile } from "../../src/features/settings/types";
 
 vi.mock("@monaco-editor/react", () => ({
   default: () => <div data-testid="monaco-editor" />,
+}));
+
+vi.mock("@tauri-apps/api/core", () => ({
+  invoke: vi.fn().mockResolvedValue("{}"),
 }));
 
 vi.mock("@tanstack/react-virtual", () => ({
@@ -63,6 +68,7 @@ const tabs: QueryTab[] = [
 ];
 
 function resetStores() {
+  vi.mocked(invoke).mockReset().mockResolvedValue("{}");
   window.localStorage.clear();
   useQueryStore.setState({
     tabs: [],
@@ -239,6 +245,79 @@ describe("query tab session and profile colours", () => {
 
     expect(useQueryStore.getState().restoreSavedSession()).toBe(true);
     expect(useQueryStore.getState().pendingCursorOffsets).toEqual({});
+  });
+
+  it("passes the query window id to the sidecar as its session id", async () => {
+    useQueryStore.setState({
+      tabs: [tabs[0]],
+      activeTabId: "unpinned",
+      tabSql: { unpinned: "select 1" },
+    });
+    useConnectionStore.setState({ activeConnectionIds: ["prod"] });
+
+    await useQueryStore.getState().executeQuery("unpinned");
+
+    expect(invoke).toHaveBeenCalledWith("query_execute", {
+      requestId: expect.any(String),
+      sessionId: "unpinned",
+      connectionId: "prod",
+      database: "master",
+      sql: "select 1",
+    });
+  });
+
+  it("does not queue a second execution from the same query window", async () => {
+    useQueryStore.setState({
+      tabs: [tabs[0]],
+      activeTabId: "unpinned",
+      tabSql: { unpinned: "select 1" },
+    });
+    useConnectionStore.setState({ activeConnectionIds: ["prod"] });
+
+    await useQueryStore.getState().executeQuery("unpinned");
+    await useQueryStore.getState().executeQuery("unpinned");
+
+    expect(invoke).toHaveBeenCalledTimes(1);
+  });
+
+  it("closes query sessions when tabs close or change connections", () => {
+    useQueryStore.setState({ tabs, activeTabId: "unpinned" });
+
+    useQueryStore.getState().removeTab("unpinned");
+    expect(invoke).toHaveBeenLastCalledWith("query_session_close", {
+      sessionId: "unpinned",
+      connectionId: "prod",
+    });
+
+    useQueryStore.setState({ tabs, activeTabId: "unpinned" });
+    useQueryStore.getState().closeOtherTabs("unpinned");
+    expect(invoke).toHaveBeenLastCalledWith("query_session_close", {
+      sessionId: "pinned",
+      connectionId: "prod",
+    });
+
+    useQueryStore.setState({ tabs, activeTabId: "unpinned" });
+    useQueryStore.getState().closeAllTabs();
+    expect(invoke).toHaveBeenNthCalledWith(3, "query_session_close", {
+      sessionId: "unpinned",
+      connectionId: "prod",
+    });
+    expect(invoke).toHaveBeenNthCalledWith(4, "query_session_close", {
+      sessionId: "pinned",
+      connectionId: "prod",
+    });
+
+    useQueryStore.setState({ tabs: [tabs[0]], activeTabId: "unpinned" });
+    useQueryStore.getState().updateTab("unpinned", { database: "app" });
+    expect(invoke).toHaveBeenCalledTimes(4);
+
+    useQueryStore.getState().updateTab("unpinned", {
+      connectionId: "reporting",
+    });
+    expect(invoke).toHaveBeenLastCalledWith("query_session_close", {
+      sessionId: "unpinned",
+      connectionId: "prod",
+    });
   });
 
   it("renders wrapping tab bands with both profile colours on active and inactive tabs", () => {

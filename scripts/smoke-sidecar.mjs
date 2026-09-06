@@ -67,14 +67,14 @@ child.on("exit", (code) => {
 
 let seq = 0;
 
-function send(method, params, { streaming = false, allowError = false } = {}) {
+function beginSend(method, params, { streaming = false, allowError = false } = {}) {
   const id = `smoke-${++seq}`;
   const request = { id, method, params };
   const promise = new Promise((resolve, reject) => {
     pending.set(id, { resolve, reject, responses: [], streaming });
   });
   child.stdin.write(`${JSON.stringify(request)}\n`);
-  return promise.then((responses) => {
+  const result = promise.then((responses) => {
     const failed = responses.find((response) => response.error);
     if (failed && !allowError) {
       throw new Error(`${method} failed: ${failed.error.code} ${failed.error.message}`);
@@ -83,6 +83,28 @@ function send(method, params, { streaming = false, allowError = false } = {}) {
       return responses;
     }
     return streaming ? responses.map((response) => response.result) : responses.at(-1).result;
+  });
+  return { id, result };
+}
+
+function send(method, params, options) {
+  return beginSend(method, params, options).result;
+}
+
+function waitForQueryStart(id, timeoutMs = 5000) {
+  return new Promise((resolve, reject) => {
+    const started = setInterval(() => {
+      const entry = pending.get(id);
+      if (entry?.responses[0]?.result?.queryId) {
+        clearInterval(started);
+        clearTimeout(timeout);
+        resolve(entry.responses[0].result);
+      }
+    }, 25);
+    const timeout = setTimeout(() => {
+      clearInterval(started);
+      reject(new Error(`timed out waiting for query ${id} to start`));
+    }, timeoutMs);
   });
 }
 
@@ -167,6 +189,7 @@ try {
   assert(savedConnections.length === 1, "duplicate connection.save should not add another recent connection");
 
   const activeConnectionId = duplicateSaved.id;
+  const primarySessionId = "smoke-primary-session";
   const connected = await send("connection.connect", { id: activeConnectionId });
   assert(connected.connectionId === activeConnectionId, "connection.connect should activate connection");
 
@@ -200,6 +223,7 @@ try {
     await send(
       "query.execute",
       {
+        sessionId: primarySessionId,
         connectionId: activeConnectionId,
         database,
         sql: "SELECT TOP (5) BusinessEntityID, FirstName, LastName FROM Person.Person ORDER BY BusinessEntityID;",
@@ -215,6 +239,7 @@ try {
     await send(
       "query.execute",
       {
+        sessionId: primarySessionId,
         connectionId: activeConnectionId,
         database,
         sql: "PRINT 'hello from ssmsx smoke'; SELECT COUNT(*) AS PersonCount FROM Person.Person;",
@@ -229,6 +254,7 @@ try {
     await send(
       "query.execute",
       {
+        sessionId: primarySessionId,
         connectionId: activeConnectionId,
         database,
         sql: [
@@ -254,6 +280,7 @@ try {
     await send(
       "query.execute",
       {
+        sessionId: primarySessionId,
         connectionId: activeConnectionId,
         database,
         sql: [
@@ -285,6 +312,7 @@ try {
     await send(
       "query.execute",
       {
+        sessionId: primarySessionId,
         connectionId: activeConnectionId,
         database,
         sql: [
@@ -311,6 +339,7 @@ try {
     await send(
       "query.execute",
       {
+        sessionId: primarySessionId,
         connectionId: activeConnectionId,
         database,
         sql: [
@@ -328,6 +357,7 @@ try {
   const invalidResponses = await send(
     "query.execute",
     {
+      sessionId: primarySessionId,
       connectionId: activeConnectionId,
       database,
       sql: [
@@ -354,40 +384,124 @@ try {
     "affected-row messages should be delivered before the later query error"
   );
 
-  const cancelId = `smoke-${++seq}`;
-  const cancelPromise = new Promise((resolve, reject) => {
-    pending.set(cancelId, { resolve, reject, responses: [], streaming: true });
-  });
-  child.stdin.write(
-    `${JSON.stringify({
-      id: cancelId,
-      method: "query.execute",
-      params: {
+  const stateSessionId = "smoke-state-session";
+  await send(
+    "query.execute",
+    {
+      sessionId: stateSessionId,
+      connectionId: activeConnectionId,
+      database,
+      sql: "CREATE TABLE #SsmsxSessionState (Value int NOT NULL); INSERT INTO #SsmsxSessionState VALUES (42);",
+    },
+    { streaming: true }
+  );
+  const persistedState = summarizeQueryResults(
+    await send(
+      "query.execute",
+      {
+        sessionId: stateSessionId,
         connectionId: activeConnectionId,
         database,
-        sql: "WAITFOR DELAY '00:00:10'; SELECT 1 AS ShouldNotNeedToFinish;",
+        sql: "SELECT Value FROM #SsmsxSessionState;",
       },
-    })}\n`
+      { streaming: true }
+    )
   );
-  const firstBatch = await new Promise((resolve, reject) => {
-    const started = setInterval(() => {
-      const entry = pending.get(cancelId);
-      if (entry?.responses[0]?.result?.queryId) {
-        clearInterval(started);
-        resolve(entry.responses[0].result);
-      }
-    }, 25);
-    setTimeout(() => {
-      clearInterval(started);
-      reject(new Error("timed out waiting for cancellable queryId"));
-    }, 5000);
+  assert(persistedState.rows[0]?.[0] === 42, "a query window should retain its SQL session state");
+
+  const isolatedState = summarizeQueryResults(
+    await send(
+      "query.execute",
+      {
+        sessionId: "smoke-isolated-session",
+        connectionId: activeConnectionId,
+        database,
+        sql: "SELECT CASE WHEN OBJECT_ID('tempdb..#SsmsxSessionState') IS NULL THEN 1 ELSE 0 END AS IsIsolated;",
+      },
+      { streaming: true }
+    )
+  );
+  assert(isolatedState.rows[0]?.[0] === 1, "SQL session state should not leak between query windows");
+
+  const sessionClosed = await send("query.sessionClose", {
+    sessionId: stateSessionId,
+    connectionId: activeConnectionId,
   });
-  const cancelResult = await send("query.cancel", { queryId: firstBatch.queryId });
-  assert(cancelResult.cancelled === true, "query.cancel should cancel the running query");
-  const cancelled = summarizeQueryResults(await cancelPromise.then((responses) => responses.map((response) => response.result)));
+  assert(sessionClosed.closed === true, "query.sessionClose should release an existing query session");
+
+  const delayedQuery = beginSend(
+    "query.execute",
+    {
+      sessionId: "smoke-concurrent-delayed",
+      connectionId: activeConnectionId,
+      database,
+      sql: "WAITFOR DELAY '00:00:03'; SELECT 1 AS DelayedResult;",
+    },
+    { streaming: true }
+  );
+  await waitForQueryStart(delayedQuery.id);
+  const fastQuery = beginSend(
+    "query.execute",
+    {
+      sessionId: "smoke-concurrent-fast",
+      connectionId: activeConnectionId,
+      database,
+      sql: "SELECT 1 AS FastResult;",
+    },
+    { streaming: true }
+  );
+  const firstCompleted = await Promise.race([
+    delayedQuery.result.then(() => "delayed"),
+    fastQuery.result.then(() => "fast"),
+  ]);
+  assert(firstCompleted === "fast", "a fast query window should not wait behind another window on the same connection");
+  const fastResult = summarizeQueryResults(await fastQuery.result);
+  const delayedResult = summarizeQueryResults(await delayedQuery.result);
+  assert(fastResult.rows[0]?.[0] === 1, "concurrent fast query should return its result");
+  assert(delayedResult.rows[0]?.[0] === 1, "concurrent delayed query should finish normally");
+
+  const firstCancellationQuery = beginSend(
+    "query.execute",
+    {
+      sessionId: "smoke-cancel-first",
+      connectionId: activeConnectionId,
+      database,
+      sql: "WAITFOR DELAY '00:00:10'; SELECT 1 AS FirstCancellationResult;",
+    },
+    { streaming: true }
+  );
+  const secondCancellationQuery = beginSend(
+    "query.execute",
+    {
+      sessionId: "smoke-cancel-second",
+      connectionId: activeConnectionId,
+      database,
+      sql: "WAITFOR DELAY '00:00:10'; SELECT 1 AS SecondCancellationResult;",
+    },
+    { streaming: true }
+  );
+  const [firstCancellationStart, secondCancellationStart] = await Promise.all([
+    waitForQueryStart(firstCancellationQuery.id),
+    waitForQueryStart(secondCancellationQuery.id),
+  ]);
+  const firstCancelResult = await send("query.cancel", { queryId: firstCancellationStart.queryId });
+  assert(firstCancelResult.cancelled === true, "query.cancel should cancel the selected query window");
+  const firstCancelled = summarizeQueryResults(await firstCancellationQuery.result);
   assert(
-    cancelled.messages.some((message) => /cancelled|canceled/i.test(message.text)),
-    "cancelled query should return a cancellation message"
+    firstCancelled.messages.some((message) => /cancelled|canceled/i.test(message.text)),
+    "the selected query window should return a cancellation message"
+  );
+  const secondQueryState = await Promise.race([
+    secondCancellationQuery.result.then(() => "finished"),
+    new Promise((resolve) => setTimeout(() => resolve("running"), 250)),
+  ]);
+  assert(secondQueryState === "running", "cancelling one query window should not cancel another");
+  const secondCancelResult = await send("query.cancel", { queryId: secondCancellationStart.queryId });
+  assert(secondCancelResult.cancelled === true, "the second query window should be independently cancellable");
+  const secondCancelled = summarizeQueryResults(await secondCancellationQuery.result);
+  assert(
+    secondCancelled.messages.some((message) => /cancelled|canceled/i.test(message.text)),
+    "the second query window should return its own cancellation message"
   );
 
   const diagram = await send("explorer.databaseDiagram", { connectionId: activeConnectionId, database });
@@ -400,6 +514,7 @@ try {
   );
 
   await send("connection.disconnect", { id: activeConnectionId });
+  assert(errors.length === 0, `sidecar protocol errors: ${errors.join("; ")}`);
 
   console.log(
     JSON.stringify(
@@ -413,6 +528,7 @@ try {
         selectRows: select.rows.length,
         multiResultSets: multiResult.resultSets.map((set) => set.rows.length),
         printMessages: messages.messages.length,
+        concurrentQueryOrder: firstCompleted,
         stderr: events.filter(Boolean).slice(-5),
       },
       null,

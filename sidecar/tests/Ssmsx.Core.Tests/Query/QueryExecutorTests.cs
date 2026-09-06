@@ -1,3 +1,4 @@
+using System.Data;
 using Ssmsx.Core.Query;
 using Xunit;
 
@@ -5,6 +6,19 @@ namespace Ssmsx.Core.Tests.Query;
 
 public class QueryExecutorTests
 {
+    [Theory]
+    [InlineData(ConnectionState.Open, 16, false)]
+    [InlineData(ConnectionState.Open, 20, true)]
+    [InlineData(ConnectionState.Closed, 16, true)]
+    [InlineData(ConnectionState.Broken, 16, true)]
+    public void ShouldEvictSession_OnlyEvictsFatalOrUnusableConnections(
+        ConnectionState state,
+        byte errorClass,
+        bool expected)
+    {
+        Assert.Equal(expected, QueryExecutor.ShouldEvictSession(state, errorClass));
+    }
+
     [Theory]
     [InlineData(-1, null)]
     [InlineData(0, "(0 rows affected)")]

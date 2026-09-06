@@ -20,10 +20,12 @@ var connectionManager = new ConnectionManager();
 var connectionOperations = new ConnectionOperationCoordinator();
 var schemaDiscovery = new SchemaDiscoveryService(connectionManager);
 var queryCancellationManager = new QueryCancellationManager();
-var queryExecutor = new QueryExecutor(connectionManager, queryCancellationManager);
+var querySessionManager = new QuerySessionManager(connectionManager);
+var queryExecutor = new QueryExecutor(querySessionManager, queryCancellationManager);
 var intelliSenseService = new IntelliSenseService(connectionManager);
 var requestCancellation = new ConcurrentDictionary<string, CancellationTokenSource>();
 var cancelledRequestIds = new ConcurrentDictionary<string, DateTimeOffset>();
+var activeQueryTasks = new ConcurrentDictionary<string, Task>();
 var cancelledRequestIdTtl = TimeSpan.FromMinutes(5);
 
 await using var stdout = Console.OpenStandardOutput();
@@ -145,7 +147,17 @@ var handlers = new Dictionary<string, Func<JsonElement?, Task<JsonElement>>>
     {
         var args = Deserialize<ConnectionDisconnectParams>(p, ProtocolJsonContext.Default.ConnectionDisconnectParams);
         await connectionManager.DisconnectAsync(args.Id);
+        await querySessionManager.CloseConnectionSessionsAsync(args.Id);
         return JsonSerializer.SerializeToElement(true, ProtocolJsonContext.Default.Boolean);
+    },
+
+    ["query.sessionClose"] = async p =>
+    {
+        var args = Deserialize<QuerySessionCloseParams>(p, ProtocolJsonContext.Default.QuerySessionCloseParams);
+        var closed = await querySessionManager.CloseSessionAsync(args.SessionId, args.ConnectionId);
+        return JsonSerializer.SerializeToElement(
+            new QuerySessionCloseResult { Closed = closed },
+            ProtocolJsonContext.Default.QuerySessionCloseResult);
     },
 
     ["explorer.databases"] = async p =>
@@ -252,6 +264,7 @@ var cancellableHandlers = new Dictionary<string, Func<JsonElement?, Cancellation
         return await connectionOperations.RunAsync(args.Id, async () =>
         {
             await connectionManager.DisconnectAsync(args.Id);
+            await querySessionManager.CloseConnectionSessionsAsync(args.Id);
             try { await credentialStore.DeleteAsync($"ssmsx/{args.Id}"); }
             catch (Exception ex) { await Console.Error.WriteLineAsync($"Warning: Failed to delete credential for connection '{args.Id}': {ex.Message}"); }
             var deleted = await connectionStore.DeleteAsync(args.Id);
@@ -289,6 +302,8 @@ var cancellableHandlers = new Dictionary<string, Func<JsonElement?, Cancellation
         var args = Deserialize<ConnectionConnectParams>(p, ProtocolJsonContext.Default.ConnectionConnectParams);
         return await connectionOperations.RunAsync(args.Id, async () =>
         {
+            await connectionManager.DisconnectAsync(args.Id);
+            await querySessionManager.CloseConnectionSessionsAsync(args.Id);
             var connId = await connectionManager.ConnectAsync(args.Id, connectionStore, credentialStore, ct);
             return JsonSerializer.SerializeToElement(
                 new ConnectionConnectResult { ConnectionId = connId },
@@ -298,15 +313,11 @@ var cancellableHandlers = new Dictionary<string, Func<JsonElement?, Cancellation
 };
 
 // --- Request processing ---
-// We use a concurrent queue + semaphore so a background stdin reader can enqueue
-// requests while the main processing loop handles them one at a time.
-// This allows query.cancel to be queued and processed between query batches,
-// since async awaits yield control to process the next queued request.
+// A dedicated reader keeps cancellation responsive while the main loop dispatches
+// query executions without waiting for other query windows to finish.
 var requestQueue = new BlockingCollection<string>();
 
-// Background stdin reader — reads lines and enqueues them.
-// Cancel requests are handled inline on this thread (SqlCommand.Cancel is thread-safe)
-// so they work even while a query is blocking the main processing loop.
+// SqlCommand.Cancel is thread-safe, so query cancellation can bypass the queue.
 var stdinReader = new Thread(() =>
 {
     string? inputLine;
@@ -386,7 +397,6 @@ var stdinReader = new Thread(() =>
 };
 stdinReader.Start();
 
-// Main processing loop — processes requests from the queue
 foreach (var requestLine in requestQueue.GetConsumingEnumerable())
 {
     string requestId = "unknown";
@@ -404,7 +414,7 @@ foreach (var requestLine in requestQueue.GetConsumingEnumerable())
         // query.execute streams multiple responses, then completes
         if (request.Method == "query.execute")
         {
-            await HandleQueryExecute(request.Id, request.Params);
+            DispatchQueryExecute(request.Id, request.Params);
             continue;
         }
 
@@ -440,13 +450,48 @@ foreach (var requestLine in requestQueue.GetConsumingEnumerable())
     }
 }
 
+foreach (var queryId in activeQueryTasks.Keys)
+    queryCancellationManager.Cancel(queryId);
+await Task.WhenAll(activeQueryTasks.Values);
+await querySessionManager.DisposeAsync();
+
 // --- query.execute handler ---
-async Task HandleQueryExecute(string requestId, JsonElement? p)
+void DispatchQueryExecute(string requestId, JsonElement? p)
+{
+    var completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+    if (!activeQueryTasks.TryAdd(requestId, completion.Task))
+    {
+        SendError(requestId, "INVALID_REQUEST", $"A query request with ID '{requestId}' is already active");
+        return;
+    }
+
+    var cts = new CancellationTokenSource();
+    queryCancellationManager.Register(requestId, cts);
+
+    _ = Task.Run(async () =>
+    {
+        try
+        {
+            await HandleQueryExecute(requestId, p, cts);
+        }
+        catch (Exception ex)
+        {
+            await Console.Error.WriteLineAsync($"Unexpected error dispatching query '{requestId}': {ex}");
+            SendError(requestId, "INTERNAL_ERROR", ex.Message);
+        }
+        finally
+        {
+            queryCancellationManager.Remove(requestId);
+            completion.TrySetResult();
+            activeQueryTasks.TryRemove(requestId, out _);
+        }
+    });
+}
+
+async Task HandleQueryExecute(string requestId, JsonElement? p, CancellationTokenSource cts)
 {
     var args = Deserialize<QueryExecuteParams>(p, ProtocolJsonContext.Default.QueryExecuteParams);
     var queryId = requestId;
-    using var cts = new CancellationTokenSource();
-    queryCancellationManager.Register(queryId, cts);
 
     // Send immediate "started" response so frontend knows the queryId for cancellation
     {
@@ -462,6 +507,7 @@ async Task HandleQueryExecute(string requestId, JsonElement? p)
     try
     {
         await queryExecutor.ExecuteAsync(
+            args.SessionId,
             args.ConnectionId,
             args.Database,
             args.Sql,

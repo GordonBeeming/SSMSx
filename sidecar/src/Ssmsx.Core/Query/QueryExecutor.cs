@@ -1,9 +1,9 @@
 using System.Data.SqlTypes;
+using System.Data;
 using System.Diagnostics;
 using System.Text;
 using System.Text.RegularExpressions;
 using Microsoft.Data.SqlClient;
-using Ssmsx.Core.Connections;
 using Ssmsx.Protocol.Messages;
 using Ssmsx.Protocol.Models;
 
@@ -21,7 +21,7 @@ public class QueryExecutor
         @"^[\t ]*GO(?:[\t ]+(?<count>[1-9][0-9]*))?[\t ]*(?:/\*(?:[^*]|\*(?!/))*\*/[\t ]*)*(?:--[^\r\n]*)?\r?$",
         RegexOptions.IgnoreCase | RegexOptions.Multiline | RegexOptions.CultureInvariant);
 
-    private readonly ConnectionManager _connectionManager;
+    private readonly QuerySessionManager _sessionManager;
     private readonly QueryCancellationManager _cancellationManager;
 
     /// <summary>
@@ -35,9 +35,9 @@ public class QueryExecutor
     /// </summary>
     private const int DefaultCommandTimeoutSeconds = 0;
 
-    public QueryExecutor(ConnectionManager connectionManager, QueryCancellationManager cancellationManager)
+    public QueryExecutor(QuerySessionManager sessionManager, QueryCancellationManager cancellationManager)
     {
-        _connectionManager = connectionManager ?? throw new ArgumentNullException(nameof(connectionManager));
+        _sessionManager = sessionManager ?? throw new ArgumentNullException(nameof(sessionManager));
         _cancellationManager = cancellationManager ?? throw new ArgumentNullException(nameof(cancellationManager));
     }
 
@@ -45,6 +45,7 @@ public class QueryExecutor
     /// Executes a SQL query, streaming result batches via the onBatch callback.
     /// Supports multiple result sets and cooperative cancellation.
     /// </summary>
+    /// <param name="sessionId">The ID of the query window whose SQL session should be used.</param>
     /// <param name="connectionId">The ID of the active connection to use.</param>
     /// <param name="database">The database context to execute the query against.</param>
     /// <param name="sql">The SQL text to execute.</param>
@@ -52,6 +53,7 @@ public class QueryExecutor
     /// <param name="onBatch">Callback invoked for each batch of results.</param>
     /// <param name="ct">Cancellation token for cooperative cancellation.</param>
     public async Task ExecuteAsync(
+        string sessionId,
         string connectionId,
         string database,
         string sql,
@@ -59,6 +61,8 @@ public class QueryExecutor
         Func<QueryExecuteResult, Task> onBatch,
         CancellationToken ct)
     {
+        if (string.IsNullOrWhiteSpace(sessionId))
+            throw new ArgumentException("Session ID cannot be null or empty.", nameof(sessionId));
         if (string.IsNullOrWhiteSpace(connectionId))
             throw new ArgumentException("Connection ID cannot be null or empty.", nameof(connectionId));
         if (string.IsNullOrWhiteSpace(database))
@@ -69,7 +73,9 @@ public class QueryExecutor
             throw new ArgumentException("Query ID cannot be null or empty.", nameof(queryId));
         ArgumentNullException.ThrowIfNull(onBatch);
 
-        var connection = _connectionManager.GetConnection(connectionId);
+        await using var session = await _sessionManager.AcquireAsync(sessionId, connectionId, ct);
+        var connection = session.Connection;
+        ct = session.CancellationToken;
         var messages = new List<QueryMessage>();
         var stopwatch = new Stopwatch();
         long totalRows = 0;
@@ -240,9 +246,11 @@ public class QueryExecutor
 
             await onBatch(cancelledBatch);
         }
-        catch (SqlException)
+        catch (SqlException ex)
         {
             stopwatch.Stop();
+            if (ShouldEvictSession(connection.State, ex.Class))
+                session.MarkBroken();
 
             if (messages.Count > 0)
             {
@@ -282,6 +290,9 @@ public class QueryExecutor
             Severity = "info"
         };
     }
+
+    internal static bool ShouldEvictSession(ConnectionState connectionState, byte errorClass) =>
+        connectionState != ConnectionState.Open || errorClass >= 20;
 
     internal static IEnumerable<string> SplitBatches(string sql)
     {
