@@ -302,9 +302,8 @@ var cancellableHandlers = new Dictionary<string, Func<JsonElement?, Cancellation
         var args = Deserialize<ConnectionConnectParams>(p, ProtocolJsonContext.Default.ConnectionConnectParams);
         return await connectionOperations.RunAsync(args.Id, async () =>
         {
-            await connectionManager.DisconnectAsync(args.Id);
-            await querySessionManager.CloseConnectionSessionsAsync(args.Id);
             var connId = await connectionManager.ConnectAsync(args.Id, connectionStore, credentialStore, ct);
+            await querySessionManager.CloseConnectionSessionsAsync(args.Id);
             return JsonSerializer.SerializeToElement(
                 new ConnectionConnectResult { ConnectionId = connId },
                 ProtocolJsonContext.Default.ConnectionConnectResult);

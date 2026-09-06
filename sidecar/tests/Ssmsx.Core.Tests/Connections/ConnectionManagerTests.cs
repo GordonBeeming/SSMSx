@@ -45,6 +45,36 @@ public sealed class ConnectionManagerTests : IDisposable
     }
 
     [Fact]
+    public async Task ConnectAsync_PreservesActiveConnection_WhenReplacementFails()
+    {
+        var store = new ConnectionStore(_tempDir);
+        var info = await store.SaveAsync(new ConnectionInfo
+        {
+            Id = "replacement-fails",
+            ServerName = "server.example.com"
+        });
+        var activeConnection = new SqlConnection();
+        var managerConnectionAttempts = 0;
+        var factory = new FakeSqlConnectionFactory((_, _, _) =>
+        {
+            if (managerConnectionAttempts++ == 0)
+                return Task.FromResult(activeConnection);
+
+            throw new InvalidOperationException("Replacement failed");
+        });
+        var manager = new ConnectionManager(factory);
+
+        await manager.ConnectAsync(info.Id, store, new FakeCredentialStore());
+
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            manager.ConnectAsync(info.Id, store, new FakeCredentialStore()));
+
+        Assert.Equal("Replacement failed", error.Message);
+        Assert.Same(activeConnection, manager.GetConnection(info.Id));
+        await manager.DisconnectAsync(info.Id);
+    }
+
+    [Fact]
     public async Task CreateQueryConnectionAsync_ReusesActiveProfileAndCredentialContext()
     {
         var store = new ConnectionStore(_tempDir);
