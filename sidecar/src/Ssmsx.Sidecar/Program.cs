@@ -466,7 +466,18 @@ void DispatchQueryExecute(string requestId, JsonElement? p)
     }
 
     var cts = new CancellationTokenSource();
-    queryCancellationManager.Register(requestId, cts);
+    try
+    {
+        queryCancellationManager.Register(requestId, cts);
+    }
+    catch (Exception ex)
+    {
+        activeQueryTasks.TryRemove(requestId, out _);
+        completion.TrySetResult();
+        cts.Dispose();
+        SendError(requestId, "INVALID_REQUEST", ex.Message);
+        return;
+    }
 
     _ = Task.Run(async () =>
     {

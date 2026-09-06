@@ -23,6 +23,25 @@ public sealed class QueryCancellationManagerTests
     }
 
     [Fact]
+    public void RemoveAfterDuplicateRegistrationFailure_CleansUpOriginalStateForReuse()
+    {
+        var manager = new QueryCancellationManager();
+        using var original = new CancellationTokenSource();
+        using var duplicate = new CancellationTokenSource();
+        using var replacement = new CancellationTokenSource();
+        manager.Register("query-1", original);
+
+        Assert.Throws<InvalidOperationException>(() => manager.Register("query-1", duplicate));
+
+        manager.Remove("query-1");
+        manager.Register("query-1", replacement);
+
+        Assert.True(manager.Cancel("query-1"));
+        Assert.True(replacement.IsCancellationRequested);
+        manager.Remove("query-1");
+    }
+
+    [Fact]
     public void CancelBeforeSetCommand_CancelsTokenAndAcceptsLateCommand()
     {
         var manager = new QueryCancellationManager();
