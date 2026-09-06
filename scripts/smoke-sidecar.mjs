@@ -25,6 +25,7 @@ const child = spawn(
 );
 
 const pending = new Map();
+const completedResponses = new Map();
 const events = [];
 const errors = [];
 
@@ -47,6 +48,7 @@ stdout.on("line", (line) => {
   entry.responses.push(message);
   if (message.error || !entry.streaming || message.result?.done === true) {
     pending.delete(message.id);
+    completedResponses.set(message.id, entry.responses);
     entry.resolve(entry.responses);
   }
 });
@@ -95,10 +97,22 @@ function waitForQueryStart(id, timeoutMs = 5000) {
   return new Promise((resolve, reject) => {
     const started = setInterval(() => {
       const entry = pending.get(id);
-      if (entry?.responses[0]?.result?.queryId) {
+      const responses = entry?.responses ?? completedResponses.get(id);
+      const firstResponse = responses?.[0];
+      if (firstResponse?.error) {
         clearInterval(started);
         clearTimeout(timeout);
-        resolve(entry.responses[0].result);
+        completedResponses.delete(id);
+        reject(
+          new Error(
+            `query ${id} failed to start: ${firstResponse.error.code} ${firstResponse.error.message}`
+          )
+        );
+      } else if (firstResponse?.result?.queryId) {
+        clearInterval(started);
+        clearTimeout(timeout);
+        completedResponses.delete(id);
+        resolve(firstResponse.result);
       }
     }, 25);
     const timeout = setTimeout(() => {
