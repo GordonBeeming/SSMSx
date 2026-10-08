@@ -85,12 +85,37 @@ public class QueryBatchStreamTests
     }
 
     [Fact]
-    public async Task PostPreservesAnEarlierOutputFailure()
+    public async Task ProducersPreserveAnEarlierOutputFailure()
     {
         var outputError = new IOException("Output pipe closed");
         var stream = new QueryBatchStream(_ => Task.FromException(outputError));
         await Assert.ThrowsAsync<IOException>(() => stream.SendAsync(new QueryExecuteResult { QueryId = "query" }));
         var error = Assert.Throws<IOException>(() => stream.Post(new QueryExecuteResult { QueryId = "query" }));
+        Assert.Same(outputError, error);
+        var sendError = await Assert.ThrowsAsync<IOException>(() => stream.SendAsync(new QueryExecuteResult { QueryId = "query" }));
+        Assert.Same(outputError, sendError);
+        await stream.CompleteAsync(outputError);
+    }
+
+    [Fact]
+    public async Task BlockedProducerReceivesTheOriginalOutputFailure()
+    {
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var outputError = new IOException("Output pipe closed");
+        var stream = new QueryBatchStream(async _ =>
+        {
+            started.TrySetResult();
+            await release.Task;
+            throw outputError;
+        });
+        stream.Post(new QueryExecuteResult { QueryId = "query" });
+        await started.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        for (var i = 0; i < QueryBatchStream.Capacity; i++)
+            stream.Post(new QueryExecuteResult { QueryId = "query" });
+        var blocked = stream.SendAsync(new QueryExecuteResult { QueryId = "query" });
+        release.TrySetResult();
+        var error = await Assert.ThrowsAsync<IOException>(() => blocked.WaitAsync(TimeSpan.FromSeconds(5)));
         Assert.Same(outputError, error);
         await stream.CompleteAsync(outputError);
     }

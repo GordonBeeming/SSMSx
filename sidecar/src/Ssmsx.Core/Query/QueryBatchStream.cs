@@ -45,8 +45,18 @@ internal sealed class QueryBatchStream : IAsyncDisposable
     public async Task SendAsync(QueryExecuteResult batch)
     {
         var receipt = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        await _channel.Writer.WriteAsync((batch, receipt));
-        await receipt.Task;
+        try
+        {
+            await _channel.Writer.WriteAsync((batch, receipt));
+            await receipt.Task;
+        }
+        catch (ChannelClosedException)
+        {
+            var failure = Volatile.Read(ref _failure);
+            if (failure is not null)
+                ExceptionDispatchInfo.Capture(failure).Throw();
+            throw;
+        }
     }
 
     private async Task ConsumeAsync(Func<QueryExecuteResult, Task> onBatch)
@@ -64,6 +74,9 @@ internal sealed class QueryBatchStream : IAsyncDisposable
                 catch (Exception ex)
                 {
                     Volatile.Write(ref _failure, ex);
+                    // Producers can resume as soon as their receipt faults.
+                    // Close the writer first so they cannot enqueue into a failed stream.
+                    _channel.Writer.TryComplete(ex);
                     item.Receipt?.SetException(ex);
                     throw;
                 }
