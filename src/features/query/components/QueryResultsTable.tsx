@@ -124,7 +124,7 @@ export function QueryResultsTable({ result, profile, tabId }: QueryResultsTableP
   // If the situation changes (e.g. a new execution that only produced messages),
   // snap the active tab back to whichever has content.
   useEffect(() => {
-    if (activeTab === "results" && !hasData && hasMessages) {
+    if (activeTab === "results" && !hasData) {
       setActiveTab("messages");
     } else if (activeTab === "messages" && !hasMessages && hasData) {
       setActiveTab("results");
@@ -539,22 +539,20 @@ export function QueryResultsTable({ result, profile, tabId }: QueryResultsTableP
               </button>
             ))
           )}
-          {hasMessages && (
-            <button
-              type="button"
-              onClick={() => setActiveTab("messages")}
-              className={`inline-flex items-center px-3 py-1 ${activeTab === "messages" ? "border-b-2 border-accent text-text-primary" : profile ? "" : "text-text-secondary hover:text-text-primary"}`}
-              style={profile ? {
-                backgroundColor: profile.background,
-                color: profile.foreground,
-                ...(activeTab === "messages"
-                  ? { borderBottomColor: profile.foreground }
-                  : {}),
-              } : undefined}
-            >
-              Messages ({result.messages.length})
-            </button>
-          )}
+          <button
+            type="button"
+            onClick={() => setActiveTab("messages")}
+            className={`inline-flex items-center px-3 py-1 ${activeTab === "messages" ? "border-b-2 border-accent text-text-primary" : profile ? "" : "text-text-secondary hover:text-text-primary"}`}
+            style={profile ? {
+              backgroundColor: profile.background,
+              color: profile.foreground,
+              ...(activeTab === "messages"
+                ? { borderBottomColor: profile.foreground }
+                : {}),
+            } : undefined}
+          >
+            Messages ({result.messages.length})
+          </button>
         </div>
 
         {activeTab === "results" && activeResultSet && (
@@ -722,7 +720,7 @@ export function QueryResultsTable({ result, profile, tabId }: QueryResultsTableP
 
       {/* Messages — select-text re-enables text selection here (body sets
           user-select: none) so message/error text can be selected and copied. */}
-      {activeTab === "messages" && hasMessages && (
+      {activeTab === "messages" && (
         <div
           ref={messagesRef}
           aria-label="Query messages"

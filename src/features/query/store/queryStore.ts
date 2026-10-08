@@ -19,6 +19,7 @@ import { useConnectionStore } from "../../connection/store/connectionStore";
 import { useSettingsStore } from "../../settings";
 import { normalizeRestoredQueryTab } from "../utils/queryTabs";
 import { parseNewQueryTemplate } from "../utils/newQueryTemplate";
+import { formatDuration } from "../utils/formatDuration";
 
 const QUERY_SESSION_STORAGE_KEY = "ssmsx.querySession.v1";
 
@@ -572,28 +573,7 @@ export const useQueryStore = create<QueryState>((set, get) => ({
       // requestId is already in executionInfo — no follow-up set needed
     } catch (e) {
       console.error(`Query execution failed for tab '${tabId}':`, e);
-      set((s) => ({
-        executionInfo: {
-          ...s.executionInfo,
-          [tabId]: {
-            ...s.executionInfo[tabId],
-            state: "failed",
-            startTime: null,
-          },
-        },
-        results: {
-          ...s.results,
-          [tabId]: {
-            ...emptyResult(),
-            messages: [
-              {
-                text: String(e),
-                severity: "error" as const,
-              },
-            ],
-          },
-        },
-      }));
+      get().handleQueryError(undefined, requestId, String(e));
     }
   },
 
@@ -702,9 +682,11 @@ export const useQueryStore = create<QueryState>((set, get) => ({
           )
         : existing.resultSets;
       const flattened = flattenFirstResultSet(resultSets);
+      const executionTimeMs = payload.executionTimeMs ?? existing.executionTimeMs;
       const finalMessages: QueryMessage[] = [
         ...existing.messages,
         ...(payload.messages ?? []),
+        { text: `Execution time: ${formatDuration(executionTimeMs)}`, severity: "info" },
       ];
 
       const isCancelled = finalMessages.some(
@@ -751,6 +733,8 @@ export const useQueryStore = create<QueryState>((set, get) => ({
 
     set((s) => {
       const existing = s.results[tabId] ?? emptyResult();
+      const startTime = s.executionInfo[tabId]?.startTime;
+      const executionTimeMs = startTime == null ? existing.executionTimeMs : Date.now() - startTime;
       return {
         executionInfo: {
           ...s.executionInfo,
@@ -764,9 +748,11 @@ export const useQueryStore = create<QueryState>((set, get) => ({
           ...s.results,
           [tabId]: {
             ...existing,
+            executionTimeMs,
             messages: [
               ...existing.messages,
               { text: error, severity: "error" as const },
+              { text: `Execution time: ${formatDuration(executionTimeMs)}`, severity: "info" as const },
             ],
           },
         },
