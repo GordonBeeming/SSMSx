@@ -1,10 +1,11 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { invoke } from "@tauri-apps/api/core";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { QueryResultsTable } from "../../src/features/query/components/QueryResultsTable";
 import { QueryTabBar } from "../../src/features/query/components/QueryTabBar";
+import { QueryTargetBar } from "../../src/features/query/components/QueryTargetBar";
 import { QueryPanel } from "../../src/features/query/components/QueryPanel";
 import { QueryEditor } from "../../src/features/query/components/QueryEditor";
 import { ObjectExplorerTree } from "../../src/features/explorer/components/ObjectExplorerTree";
@@ -142,6 +143,7 @@ describe("query tab session and profile colours", () => {
         text: "Invalid object name 'dbo.TableThatDoesNotExist'.",
         severity: "error",
       },
+      { text: expect.stringMatching(/^Execution time: /), severity: "info" },
     ]);
   });
 
@@ -672,4 +674,92 @@ describe("query results layout and resizing", () => {
       expect.any(Function)
     );
   });
+});
+
+
+describe("query output streaming", () => {
+  it("clears prior output, publishes messages and multiple result sets before completion, then appends duration", async () => {
+    useConnectionStore.setState({ activeConnectionIds: ["prod"] });
+    useQueryStore.setState({ tabs: [tabs[0]], activeTabId: "unpinned", tabSql: { unpinned: "select 1" } });
+    await useQueryStore.getState().executeQuery("unpinned");
+    const requestId = useQueryStore.getState().executionInfo.unpinned.requestId;
+    if (!requestId) throw new Error("Missing execution request ID");
+    const base = { queryId: "stream", requestId, batch: 1, done: false };
+    useQueryStore.getState().handleResultsBatch({ ...base, messages: [{ text: "Starting", severity: "info" }] });
+    const columns = [{ name: "Value", dataType: "int", isNullable: false }];
+    useQueryStore.getState().handleResultsBatch({ ...base, columns, resultSetIndex: 0 });
+    useQueryStore.getState().handleResultsBatch({ ...base, rows: [[1]], resultSetIndex: 0 });
+    useQueryStore.getState().handleResultsBatch({ ...base, columns, rows: [[2]], resultSetIndex: 1 });
+    expect(useQueryStore.getState().executionInfo.unpinned.state).toBe("executing");
+    expect(useQueryStore.getState().results.unpinned.resultSets.map((set) => set.rows)).toEqual([[[1]], [[2]]]);
+    expect(useQueryStore.getState().results.unpinned.messages.map((message) => message.text)).toEqual(["Starting"]);
+    useQueryStore.getState().handleQueryComplete({ ...base, done: true, executionTimeMs: 1234 });
+    expect(useQueryStore.getState().results.unpinned.messages.map((message) => message.text)).toEqual(["Starting", "Execution time: 00:00:01.234"]);
+    await useQueryStore.getState().executeQuery("unpinned");
+    expect(useQueryStore.getState().results.unpinned.messages).toEqual([]);
+    expect(useQueryStore.getState().results.unpinned.resultSets).toEqual([]);
+  });
+});
+
+describe("target database validation", () => {
+  it.each(["app", "App", "other"])("preserves only an exact database match when switching to a server with %s", async (databaseName) => {
+    useConnectionStore.setState({
+      activeConnectionIds: ["prod", "reporting"],
+      connections: ["prod", "reporting"].map((id) => ({ id, serverName: id, authType: "SqlAuth", encrypt: "Mandatory", trustServerCertificate: false, createdAt: "" })),
+    });
+    useQueryStore.setState({ tabs: [{ ...tabs[0], database: "app" }], activeTabId: "unpinned", tabSql: { unpinned: "select 1" } });
+    let resolveDatabases: ((value: string) => void) | undefined;
+    vi.mocked(invoke).mockImplementation(async (command, args) => {
+      if (command === "explorer_databases") {
+        if (args && "connectionId" in args && args.connectionId === "reporting") {
+          return new Promise<string>((resolve) => { resolveDatabases = resolve; });
+        }
+        return JSON.stringify([{ name: "app", state: "ONLINE", compatibilityLevel: 160 }]);
+      }
+      return "{}";
+    });
+    render(<QueryTargetBar tabId="unpinned" />);
+    await waitFor(() => expect(screen.queryByText("Loading databases...")).toBeNull());
+    fireEvent.change(screen.getByTitle("Connection"), { target: { value: "reporting" } });
+    expect(useQueryStore.getState().tabs[0].database).toBe("");
+    await useQueryStore.getState().executeQuery("unpinned");
+    expect(vi.mocked(invoke).mock.calls.some(([command]) => command === "query_execute")).toBe(false);
+    await act(async () => {
+      if (!resolveDatabases) throw new Error("Missing database request");
+      resolveDatabases(JSON.stringify([{ name: databaseName, state: "ONLINE", compatibilityLevel: 160 }]));
+    });
+    expect(useQueryStore.getState().tabs[0].database).toBe(databaseName === "app" ? "app" : "");
+    expect(screen.getByTitle("Database")).toHaveProperty("value", databaseName === "app" ? "app" : "");
+  });
+});
+
+
+it("retains the database candidate through rapid server switches and ignores stale lists", async () => {
+  useConnectionStore.setState({
+    activeConnectionIds: ["prod", "reporting", "third"],
+    connections: ["prod", "reporting", "third"].map((id) => ({ id, serverName: id, authType: "SqlAuth", encrypt: "Mandatory", trustServerCertificate: false, createdAt: "" })),
+  });
+  useQueryStore.setState({ tabs: [{ ...tabs[0], database: "app" }], activeTabId: "unpinned" });
+  const resolvers = new Map<string, (value: string) => void>();
+  vi.mocked(invoke).mockImplementation(async (command, args) => {
+    if (command === "explorer_databases" && args && "connectionId" in args && typeof args.connectionId === "string") {
+      const connectionId = args.connectionId;
+      return new Promise<string>((resolve) => { resolvers.set(connectionId, resolve); });
+    }
+    return "{}";
+  });
+  render(<QueryTargetBar tabId="unpinned" />);
+  fireEvent.change(screen.getByTitle("Connection"), { target: { value: "reporting" } });
+  fireEvent.change(screen.getByTitle("Connection"), { target: { value: "third" } });
+  expect(useQueryStore.getState().tabs[0].database).toBe("");
+  await act(async () => {
+    const resolve = resolvers.get("third");
+    if (!resolve) throw new Error("Missing third server request");
+    resolve(JSON.stringify([{ name: "app", state: "ONLINE", compatibilityLevel: 160 }]));
+  });
+  expect(useQueryStore.getState().tabs[0].database).toBe("app");
+  await act(async () => {
+    for (const connectionId of ["prod", "reporting"]) resolvers.get(connectionId)?.("[]");
+  });
+  expect(useQueryStore.getState().tabs[0].database).toBe("app");
 });

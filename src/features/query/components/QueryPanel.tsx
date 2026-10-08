@@ -174,8 +174,7 @@ export function QueryPanel() {
   }
 
   const hasResults =
-    activeResult &&
-    (activeResult.columns.length > 0 || activeResult.messages.length > 0);
+    activeResult !== undefined;
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">

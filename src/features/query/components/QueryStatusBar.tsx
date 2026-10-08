@@ -1,3 +1,4 @@
+import { formatDuration } from "../utils/formatDuration";
 import { useState, useEffect, useRef } from "react";
 import { useQueryStore } from "../store/queryStore";
 import { useConnectionStore } from "../../connection";
@@ -99,19 +100,4 @@ export function QueryStatusBar({ tabId }: QueryStatusBarProps) {
       )}
     </div>
   );
-}
-
-function formatDuration(ms: number): string {
-  const totalSeconds = Math.floor(ms / 1000);
-  const hours = Math.floor(totalSeconds / 3600);
-  const minutes = Math.floor((totalSeconds % 3600) / 60);
-  const seconds = totalSeconds % 60;
-  const millis = Math.floor(ms % 1000);
-
-  const hh = String(hours).padStart(2, "0");
-  const mm = String(minutes).padStart(2, "0");
-  const ss = String(seconds).padStart(2, "0");
-  const mmm = String(millis).padStart(3, "0");
-
-  return `${hh}:${mm}:${ss}.${mmm}`;
 }

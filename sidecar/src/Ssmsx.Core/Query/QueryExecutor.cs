@@ -76,10 +76,9 @@ public class QueryExecutor
         await using var session = await _sessionManager.AcquireAsync(sessionId, connectionId, ct);
         var connection = session.Connection;
         ct = session.CancellationToken;
-        var messages = new List<QueryMessage>();
+        await using var stream = new QueryBatchStream(onBatch);
         var stopwatch = new Stopwatch();
         long totalRows = 0;
-        int batchNumber = 0;
 
         // Hook into InfoMessage for PRINT statements and non-fatal errors
         SqlInfoMessageEventHandler infoMessageHandler = (sender, args) =>
@@ -87,11 +86,15 @@ public class QueryExecutor
             foreach (SqlError error in args.Errors)
             {
                 var severity = error.Class > 10 ? "error" : "info";
-                messages.Add(new QueryMessage
+                stream.Post(new QueryExecuteResult
                 {
-                    Text = error.Message,
-                    Severity = severity,
-                    LineNumber = error.LineNumber > 0 ? error.LineNumber : null
+                    QueryId = queryId,
+                    Messages = [new QueryMessage
+                    {
+                        Text = error.Message,
+                        Severity = severity,
+                        LineNumber = error.LineNumber > 0 ? error.LineNumber : null
+                    }]
                 });
             }
         };
@@ -111,7 +114,7 @@ public class QueryExecutor
             {
                 var message = CreateAffectedRowMessage(args.RecordCount);
                 if (message is not null)
-                    messages.Add(message);
+                    stream.Post(new QueryExecuteResult { QueryId = queryId, Messages = [message] });
             };
             _cancellationManager.SetCommand(queryId, cmd);
 
@@ -121,58 +124,84 @@ public class QueryExecutor
                 cmd.CommandText = batchSql;
 
                 await using var reader = await cmd.ExecuteReaderAsync(ct);
+                using var readCancellation = CancellationTokenSource.CreateLinkedTokenSource(ct);
 
                 do
                 {
                     // Read column metadata for this result set
                     var columns = ReadColumnMetadata(reader);
-                    bool isFirstBatchForResultSet = true;
-
-                    var rowBuffer = new List<List<object?>>();
-
-                    while (await reader.ReadAsync(ct))
+                    if (columns.Count > 0)
                     {
-                        var row = ReadRow(reader);
-                        rowBuffer.Add(row);
-                        totalRows++;
-
-                        if (rowBuffer.Count >= BatchSize)
-                        {
-                            batchNumber++;
-                            var batch = new QueryExecuteResult
-                            {
-                                QueryId = queryId,
-                                Columns = isFirstBatchForResultSet ? columns : null,
-                                Rows = rowBuffer,
-                                Batch = batchNumber,
-                                Done = false,
-                                ResultSetIndex = resultSetIndex,
-                                Database = connection.Database
-                            };
-
-                            await onBatch(batch);
-                            rowBuffer = new List<List<object?>>();
-                            isFirstBatchForResultSet = false;
-                        }
-                    }
-
-                    // Send remaining rows for this result set (or an empty batch with columns if no rows)
-                    if (rowBuffer.Count > 0 || isFirstBatchForResultSet)
-                    {
-                        batchNumber++;
-                        var batch = new QueryExecuteResult
+                        await stream.SendAsync(new QueryExecuteResult
                         {
                             QueryId = queryId,
-                            Columns = isFirstBatchForResultSet ? columns : null,
-                            Rows = rowBuffer.Count > 0 ? rowBuffer : null,
-                            Batch = batchNumber,
-                            Done = false,
+                            Columns = columns,
                             ResultSetIndex = resultSetIndex,
                             Database = connection.Database
-                        };
-
-                        await onBatch(batch);
+                        });
                     }
+
+                    var rowBuffer = new List<List<object?>>();
+                    async Task FlushRowsAsync()
+                    {
+                        if (rowBuffer.Count == 0) return;
+                        await stream.SendAsync(new QueryExecuteResult
+                        {
+                            QueryId = queryId,
+                            Rows = rowBuffer,
+                            ResultSetIndex = resultSetIndex,
+                            Database = connection.Database
+                        });
+                        rowBuffer = new List<List<object?>>();
+                    }
+
+                    var lastFlush = stopwatch.ElapsedMilliseconds;
+                    while (true)
+                    {
+                        var read = reader.ReadAsync(readCancellation.Token);
+                        if (rowBuffer.Count > 0 && !read.IsCompleted)
+                        {
+                            // Flush available rows while SQL is still producing the next one.
+                            using var flushDelay = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                            try
+                            {
+                                var delay = Task.Delay(100, flushDelay.Token);
+                                if (await Task.WhenAny(read, delay) == delay)
+                                {
+                                    await FlushRowsAsync();
+                                    lastFlush = stopwatch.ElapsedMilliseconds;
+                                }
+                            }
+                            catch
+                            {
+                                // Observe the outstanding read before disposing its reader,
+                                // while retaining the output failure as the primary error.
+                                await readCancellation.CancelAsync();
+                                try
+                                {
+                                    await read;
+                                }
+                                catch (Exception readError)
+                                {
+                                    Console.Error.WriteLine($"Query read ended after output failure: {readError.Message}");
+                                }
+                                throw;
+                            }
+                            finally
+                            {
+                                await flushDelay.CancelAsync();
+                            }
+                        }
+                        if (!await read) break;
+                        rowBuffer.Add(ReadRow(reader));
+                        totalRows++;
+                        if (rowBuffer.Count >= BatchSize || stopwatch.ElapsedMilliseconds - lastFlush >= 100)
+                        {
+                            await FlushRowsAsync();
+                            lastFlush = stopwatch.ElapsedMilliseconds;
+                        }
+                    }
+                    await FlushRowsAsync();
 
                     if (columns.Count > 0)
                         resultSetIndex++;
@@ -183,91 +212,73 @@ public class QueryExecutor
             stopwatch.Stop();
 
             // Send final "done" batch
-            batchNumber++;
             var finalBatch = new QueryExecuteResult
             {
                 QueryId = queryId,
-                Batch = batchNumber,
                 Done = true,
                 ExecutionTimeMs = stopwatch.ElapsedMilliseconds,
                 TotalRows = totalRows,
-                Messages = messages.Count > 0 ? messages : null,
                 Database = connection.Database
             };
 
-            await onBatch(finalBatch);
+            await stream.SendAsync(finalBatch);
         }
         catch (OperationCanceledException)
         {
             stopwatch.Stop();
 
-            messages.Add(new QueryMessage
+            stream.Post(new QueryExecuteResult
             {
-                Text = "Query execution was cancelled by the user.",
-                Severity = "info"
+                QueryId = queryId,
+                Messages = [new QueryMessage
+                {
+                    Text = "Query execution was cancelled by the user.",
+                    Severity = "info"
+                }]
             });
 
-            batchNumber++;
             var cancelledBatch = new QueryExecuteResult
             {
                 QueryId = queryId,
-                Batch = batchNumber,
                 Done = true,
                 ExecutionTimeMs = stopwatch.ElapsedMilliseconds,
                 TotalRows = totalRows,
-                Messages = messages.Count > 0 ? messages : null,
                 Database = connection.Database
             };
 
-            await onBatch(cancelledBatch);
+            await stream.SendAsync(cancelledBatch);
         }
         catch (SqlException ex) when (ex.Number == 0 && ex.Message.Contains("Operation cancelled"))
         {
             // SqlCommand.Cancel() can throw SqlException with this pattern
             stopwatch.Stop();
 
-            messages.Add(new QueryMessage
+            stream.Post(new QueryExecuteResult
             {
-                Text = "Query execution was cancelled by the user.",
-                Severity = "info"
+                QueryId = queryId,
+                Messages = [new QueryMessage
+                {
+                    Text = "Query execution was cancelled by the user.",
+                    Severity = "info"
+                }]
             });
 
-            batchNumber++;
             var cancelledBatch = new QueryExecuteResult
             {
                 QueryId = queryId,
-                Batch = batchNumber,
                 Done = true,
                 ExecutionTimeMs = stopwatch.ElapsedMilliseconds,
                 TotalRows = totalRows,
-                Messages = messages.Count > 0 ? messages : null,
                 Database = connection.Database
             };
 
-            await onBatch(cancelledBatch);
+            await stream.SendAsync(cancelledBatch);
         }
         catch (SqlException ex)
         {
             stopwatch.Stop();
             if (ShouldEvictSession(connection.State, ex.Class))
                 session.MarkBroken();
-
-            if (messages.Count > 0)
-            {
-                batchNumber++;
-                var messageBatch = new QueryExecuteResult
-                {
-                    QueryId = queryId,
-                    Batch = batchNumber,
-                    Done = false,
-                    ExecutionTimeMs = stopwatch.ElapsedMilliseconds,
-                    TotalRows = totalRows,
-                    Messages = messages,
-                    Database = connection.Database
-                };
-
-                await onBatch(messageBatch);
-            }
 
             throw;
         }

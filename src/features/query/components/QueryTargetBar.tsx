@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { explorerDatabases } from "../../explorer/api/explorerApi";
 import { useConnectionStore } from "../../connection";
 import { useQueryStore } from "../store/queryStore";
@@ -16,6 +16,7 @@ export function QueryTargetBar({ tabId }: QueryTargetBarProps) {
   const activeConnectionIds = useConnectionStore((s) => s.activeConnectionIds);
   const connect = useConnectionStore((s) => s.connect);
   const cancelConnectionAttempt = useConnectionStore((s) => s.cancelConnectionAttempt);
+  const pendingDatabase = useRef<{ tabId: string; connectionId: string; database: string } | null>(null);
   const [databases, setDatabases] = useState<DatabaseInfo[]>([]);
   const [databaseLoading, setDatabaseLoading] = useState(false);
   const [databaseError, setDatabaseError] = useState<string | null>(null);
@@ -33,6 +34,7 @@ export function QueryTargetBar({ tabId }: QueryTargetBarProps) {
       setDatabases([]);
       setDatabaseError(null);
       setDatabaseLoading(false);
+      if (!tab?.connectionId) pendingDatabase.current = null;
       return;
     }
 
@@ -43,12 +45,20 @@ export function QueryTargetBar({ tabId }: QueryTargetBarProps) {
       .then((items) => {
         if (!cancelled) {
           setDatabases(items.filter((db) => db.state.toUpperCase() === "ONLINE"));
+          const currentTab = useQueryStore.getState().tabs.find((item) => item.id === tabId);
+          if (currentTab?.connectionId !== tab.connectionId) return;
+          const pending = pendingDatabase.current;
+          if (pending?.tabId === tabId && pending.connectionId === tab.connectionId) {
+            pendingDatabase.current = null;
+            updateTab(tabId, { database: items.some((db) => db.name === pending.database) ? pending.database : "" });
+          }
         }
       })
       .catch((e) => {
         if (!cancelled) {
           setDatabases([]);
           setDatabaseError(String(e));
+          pendingDatabase.current = null;
         }
       })
       .finally(() => {
@@ -60,7 +70,7 @@ export function QueryTargetBar({ tabId }: QueryTargetBarProps) {
     return () => {
       cancelled = true;
     };
-  }, [isConnected, tab?.connectionId]);
+  }, [isConnected, tab?.connectionId, tabId, updateTab]);
 
   useEffect(() => {
     const handleCancelled = (event: Event) => {
@@ -89,21 +99,28 @@ export function QueryTargetBar({ tabId }: QueryTargetBarProps) {
       }
 
       if (!connectionId) {
+        pendingDatabase.current = null;
         updateTab(tab.id, { connectionId: null });
         return;
       }
 
-      const nextConnection = connections.find((c) => c.id === connectionId);
-      updateTab(tab.id, { connectionId, database: nextConnection?.database || tab.database || "master" });
+      if (connectionId === tab.connectionId) return;
+      const pending = pendingDatabase.current;
+      const database = pending?.tabId === tab.id ? pending.database : tab.database;
+      pendingDatabase.current = { tabId: tab.id, connectionId, database };
+      setDatabases([]);
+      updateTab(tab.id, { connectionId, database: "" });
 
       if (!activeConnectionIds.includes(connectionId)) {
         await connect(connectionId);
-        if (!useConnectionStore.getState().activeConnectionIds.includes(connectionId)) {
+        if (!useConnectionStore.getState().activeConnectionIds.includes(connectionId) &&
+            useQueryStore.getState().tabs.find((item) => item.id === tab.id)?.connectionId === connectionId) {
+          pendingDatabase.current = null;
           updateTab(tab.id, { connectionId: null });
         }
       }
     },
-    [activeConnectionIds, cancelConnectionAttempt, connect, connections, tab, updateTab]
+    [activeConnectionIds, cancelConnectionAttempt, connect, tab, updateTab]
   );
 
   if (!tab) return null;
@@ -131,7 +148,7 @@ export function QueryTargetBar({ tabId }: QueryTargetBarProps) {
       <select
         value={tab.database}
         onChange={(event) => updateTab(tab.id, { database: event.target.value })}
-        disabled={!isConnected}
+        disabled={!isConnected || databaseLoading}
         className="h-6 min-w-[160px] rounded border border-bg-tertiary bg-bg-primary px-2 text-xs text-text-primary disabled:cursor-not-allowed disabled:opacity-50 focus:border-accent-hover focus:outline-none"
         title="Database"
       >
