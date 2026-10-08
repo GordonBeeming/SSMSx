@@ -1,3 +1,4 @@
+using System.Runtime.ExceptionServices;
 using System.Threading.Channels;
 using Ssmsx.Protocol.Messages;
 
@@ -7,10 +8,18 @@ namespace Ssmsx.Core.Query;
 // result batches without blocking SqlClient or letting callback writes overlap.
 internal sealed class QueryBatchStream : IAsyncDisposable
 {
+    internal const int Capacity = 1024;
+
     private readonly Channel<(QueryExecuteResult Batch, TaskCompletionSource? Receipt)> _channel =
-        Channel.CreateUnbounded<(QueryExecuteResult, TaskCompletionSource?)>(
-            new UnboundedChannelOptions { SingleReader = true, AllowSynchronousContinuations = false });
+        Channel.CreateBounded<(QueryExecuteResult, TaskCompletionSource?)>(
+            new BoundedChannelOptions(Capacity)
+            {
+                SingleReader = true,
+                AllowSynchronousContinuations = false,
+                FullMode = BoundedChannelFullMode.Wait
+            });
     private readonly Task _consumer;
+    private Exception? _failure;
 
     public QueryBatchStream(Func<QueryExecuteResult, Task> onBatch)
     {
@@ -20,7 +29,17 @@ internal sealed class QueryBatchStream : IAsyncDisposable
     public void Post(QueryExecuteResult batch)
     {
         if (!_channel.Writer.TryWrite((batch, null)))
-            throw new InvalidOperationException("Query result stream is closed.");
+        {
+            // Blocking a SQL event handler can deadlock the reader. Fail explicitly
+            // when output cannot keep up, rather than silently losing SQL messages.
+            var failure = Volatile.Read(ref _failure);
+            if (failure is not null)
+                ExceptionDispatchInfo.Capture(failure).Throw();
+            var error = new InvalidOperationException("Query output exceeded the pending message limit or the output stream closed.");
+            Volatile.Write(ref _failure, error);
+            _channel.Writer.TryComplete(error);
+            throw error;
+        }
     }
 
     public async Task SendAsync(QueryExecuteResult batch)
@@ -44,6 +63,7 @@ internal sealed class QueryBatchStream : IAsyncDisposable
                 }
                 catch (Exception ex)
                 {
+                    Volatile.Write(ref _failure, ex);
                     item.Receipt?.SetException(ex);
                     throw;
                 }
@@ -51,6 +71,7 @@ internal sealed class QueryBatchStream : IAsyncDisposable
         }
         catch (Exception ex)
         {
+            Volatile.Write(ref _failure, ex);
             _channel.Writer.TryComplete(ex);
             while (_channel.Reader.TryRead(out var pending))
                 pending.Receipt?.SetException(ex);
@@ -58,9 +79,19 @@ internal sealed class QueryBatchStream : IAsyncDisposable
         }
     }
 
-    public async ValueTask DisposeAsync()
+    public ValueTask DisposeAsync() => CompleteAsync(null);
+
+    public async ValueTask CompleteAsync(Exception? primaryError)
     {
         _channel.Writer.TryComplete();
-        await _consumer;
+        try
+        {
+            await _consumer;
+        }
+        catch (Exception outputError) when (primaryError is not null)
+        {
+            if (!ReferenceEquals(outputError, primaryError))
+                Console.Error.WriteLine($"Query output failed while preserving the execution error: {outputError.Message}");
+        }
     }
 }

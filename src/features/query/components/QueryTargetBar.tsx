@@ -10,16 +10,28 @@ interface QueryTargetBarProps {
 }
 
 export function QueryTargetBar({ tabId }: QueryTargetBarProps) {
-  const tab = useQueryStore((s) => s.tabs.find((t) => t.id === tabId));
+  const tabs = useQueryStore((s) => s.tabs);
+  const tab = tabs.find((item) => item.id === tabId);
   const updateTab = useQueryStore((s) => s.updateTab);
   const connections = useConnectionStore((s) => s.connections);
   const activeConnectionIds = useConnectionStore((s) => s.activeConnectionIds);
   const connect = useConnectionStore((s) => s.connect);
   const cancelConnectionAttempt = useConnectionStore((s) => s.cancelConnectionAttempt);
-  const pendingDatabase = useRef<{ tabId: string; connectionId: string; database: string } | null>(null);
+  const pendingDatabases = useRef(new Map<string, { connectionId: string; database: string }>());
+  const targetChanges = useRef(new Map<string, object>());
   const [databases, setDatabases] = useState<DatabaseInfo[]>([]);
   const [databaseLoading, setDatabaseLoading] = useState(false);
   const [databaseError, setDatabaseError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const tabIds = new Set(tabs.map((item) => item.id));
+    for (const id of pendingDatabases.current.keys()) {
+      if (!tabIds.has(id)) pendingDatabases.current.delete(id);
+    }
+    for (const id of targetChanges.current.keys()) {
+      if (!tabIds.has(id)) targetChanges.current.delete(id);
+    }
+  }, [tabs]);
 
   const isConnected =
     !!tab?.connectionId && activeConnectionIds.includes(tab.connectionId);
@@ -34,7 +46,7 @@ export function QueryTargetBar({ tabId }: QueryTargetBarProps) {
       setDatabases([]);
       setDatabaseError(null);
       setDatabaseLoading(false);
-      if (!tab?.connectionId) pendingDatabase.current = null;
+      if (!tab?.connectionId) pendingDatabases.current.delete(tabId);
       return;
     }
 
@@ -44,13 +56,14 @@ export function QueryTargetBar({ tabId }: QueryTargetBarProps) {
     explorerDatabases(tab.connectionId)
       .then((items) => {
         if (!cancelled) {
-          setDatabases(items.filter((db) => db.state.toUpperCase() === "ONLINE"));
+          const onlineDatabases = items.filter((db) => db.state.toUpperCase() === "ONLINE");
+          setDatabases(onlineDatabases);
           const currentTab = useQueryStore.getState().tabs.find((item) => item.id === tabId);
           if (currentTab?.connectionId !== tab.connectionId) return;
-          const pending = pendingDatabase.current;
-          if (pending?.tabId === tabId && pending.connectionId === tab.connectionId) {
-            pendingDatabase.current = null;
-            updateTab(tabId, { database: items.some((db) => db.name === pending.database) ? pending.database : "" });
+          const pending = pendingDatabases.current.get(tabId);
+          if (pending?.connectionId === tab.connectionId) {
+            pendingDatabases.current.delete(tabId);
+            updateTab(tabId, { database: onlineDatabases.some((db) => db.name === pending.database) ? pending.database : "" });
           }
         }
       })
@@ -58,7 +71,7 @@ export function QueryTargetBar({ tabId }: QueryTargetBarProps) {
         if (!cancelled) {
           setDatabases([]);
           setDatabaseError(String(e));
-          pendingDatabase.current = null;
+          pendingDatabases.current.delete(tabId);
         }
       })
       .finally(() => {
@@ -93,21 +106,25 @@ export function QueryTargetBar({ tabId }: QueryTargetBarProps) {
     async (connectionId: string) => {
       if (!tab) return;
 
+      const pending = pendingDatabases.current.get(tab.id);
+      const database = pending?.database ?? tab.database;
+      const change = {};
+      targetChanges.current.set(tab.id, change);
       const activeRequestId = useConnectionStore.getState().activeRequestId;
       if (activeRequestId) {
         await cancelConnectionAttempt();
       }
+      if (targetChanges.current.get(tab.id) !== change ||
+          !useQueryStore.getState().tabs.some((item) => item.id === tab.id)) return;
 
       if (!connectionId) {
-        pendingDatabase.current = null;
+        pendingDatabases.current.delete(tab.id);
         updateTab(tab.id, { connectionId: null });
         return;
       }
 
       if (connectionId === tab.connectionId) return;
-      const pending = pendingDatabase.current;
-      const database = pending?.tabId === tab.id ? pending.database : tab.database;
-      pendingDatabase.current = { tabId: tab.id, connectionId, database };
+      pendingDatabases.current.set(tab.id, { connectionId, database });
       setDatabases([]);
       updateTab(tab.id, { connectionId, database: "" });
 
@@ -115,7 +132,7 @@ export function QueryTargetBar({ tabId }: QueryTargetBarProps) {
         await connect(connectionId);
         if (!useConnectionStore.getState().activeConnectionIds.includes(connectionId) &&
             useQueryStore.getState().tabs.find((item) => item.id === tab.id)?.connectionId === connectionId) {
-          pendingDatabase.current = null;
+          pendingDatabases.current.delete(tab.id);
           updateTab(tab.id, { connectionId: null });
         }
       }

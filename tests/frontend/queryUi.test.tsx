@@ -763,3 +763,58 @@ it("retains the database candidate through rapid server switches and ignores sta
   });
   expect(useQueryStore.getState().tabs[0].database).toBe("app");
 });
+
+
+it("does not restore an offline database on a new server", async () => {
+  useConnectionStore.setState({ activeConnectionIds: ["prod", "reporting"], connections: ["prod", "reporting"].map((id) => ({ id, serverName: id, authType: "SqlAuth", encrypt: "Mandatory", trustServerCertificate: false, createdAt: "" })) });
+  useQueryStore.setState({ tabs: [{ ...tabs[0], database: "app" }], activeTabId: "unpinned" });
+  vi.mocked(invoke).mockImplementation(async (command) => command === "explorer_databases" ? JSON.stringify([{ name: "app", state: "OFFLINE", compatibilityLevel: 160 }]) : "{}");
+  render(<QueryTargetBar tabId="unpinned" />);
+  fireEvent.change(screen.getByTitle("Connection"), { target: { value: "reporting" } });
+  await waitFor(() => expect(screen.queryByText("Loading databases...")).toBeNull());
+  expect(useQueryStore.getState().tabs[0].database).toBe("");
+});
+
+it("keeps each tab's database candidate when another tab has no connection", async () => {
+  useConnectionStore.setState({ activeConnectionIds: ["prod", "reporting"], connections: ["prod", "reporting"].map((id) => ({ id, serverName: id, authType: "SqlAuth", encrypt: "Mandatory", trustServerCertificate: false, createdAt: "" })) });
+  useQueryStore.setState({ tabs: [{ ...tabs[0], database: "app" }, { ...tabs[1], connectionId: null }], activeTabId: "unpinned" });
+  const resolvers: Array<(value: string) => void> = [];
+  vi.mocked(invoke).mockImplementation(async (command) => command === "explorer_databases" ? new Promise<string>((resolve) => { resolvers.push(resolve); }) : "{}");
+  const view = render(<QueryTargetBar tabId="unpinned" />);
+  fireEvent.change(screen.getByTitle("Connection"), { target: { value: "reporting" } });
+  view.rerender(<QueryTargetBar tabId="pinned" />);
+  await act(async () => { for (const resolve of resolvers) resolve("[]"); });
+  view.rerender(<QueryTargetBar tabId="unpinned" />);
+  await act(async () => {
+    const resolve = resolvers.at(-1);
+    if (!resolve) throw new Error("Missing returned tab database request");
+    resolve(JSON.stringify([{ name: "app", state: "ONLINE", compatibilityLevel: 160 }]));
+  });
+  expect(useQueryStore.getState().tabs[0].database).toBe("app");
+});
+
+it("captures the database candidate before a connection cancellation clears the target", async () => {
+  const originalCancel = useConnectionStore.getState().cancelConnectionAttempt;
+  useConnectionStore.setState({ activeRequestId: "connecting", activeConnectionIds: ["third"], connections: ["prod", "reporting", "third"].map((id) => ({ id, serverName: id, authType: "SqlAuth", encrypt: "Mandatory", trustServerCertificate: false, createdAt: "" })) });
+  useQueryStore.setState({ tabs: [{ ...tabs[0], connectionId: "reporting", database: "app" }], activeTabId: "unpinned" });
+  let releaseCancellation: (() => void) | undefined;
+  useConnectionStore.setState({ cancelConnectionAttempt: async () => {
+    window.dispatchEvent(new CustomEvent("connection:attempt-cancelled", { detail: { connectionId: "reporting" } }));
+    await new Promise<void>((resolve) => { releaseCancellation = resolve; });
+    useConnectionStore.setState({ activeRequestId: null });
+  } });
+  vi.mocked(invoke).mockImplementation(async (command) => command === "explorer_databases" ? JSON.stringify([{ name: "app", state: "ONLINE", compatibilityLevel: 160 }]) : "{}");
+  try {
+    render(<QueryTargetBar tabId="unpinned" />);
+    fireEvent.change(screen.getByTitle("Connection"), { target: { value: "third" } });
+    expect(useQueryStore.getState().tabs[0].connectionId).toBeNull();
+    await act(async () => {
+      if (!releaseCancellation) throw new Error("Missing cancellation request");
+      releaseCancellation();
+    });
+    await waitFor(() => expect(useQueryStore.getState().tabs[0].database).toBe("app"));
+    expect(useQueryStore.getState().tabs[0].connectionId).toBe("third");
+  } finally {
+    useConnectionStore.setState({ cancelConnectionAttempt: originalCancel, activeRequestId: null });
+  }
+});
