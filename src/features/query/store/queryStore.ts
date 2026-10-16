@@ -3,6 +3,7 @@ import type {
   QueryTab,
   QueryExecutionState,
   QueryResult,
+  QueryResultView,
   QueryResultSet,
   QueryBatchPayload,
   QueryColumn,
@@ -46,6 +47,8 @@ interface QueryState {
   tabSql: Record<string, string>;
   executionInfo: Record<string, TabExecutionInfo>;
   results: Record<string, QueryResult>;
+  resultViews: Record<string, QueryResultView>;
+  updateResultView: (tabId: string, executionId: string | null, patch: Partial<Omit<QueryResultView, "executionId">>) => void;
   intellisenseCache: Record<string, IntelliSenseMetadata>;
   pendingCursorOffsets: Record<string, number>;
 
@@ -204,6 +207,7 @@ export const useQueryStore = create<QueryState>((set, get) => ({
   tabSql: {},
   executionInfo: {},
   results: {},
+  resultViews: {},
   intellisenseCache: {},
   pendingCursorOffsets: {},
 
@@ -240,12 +244,14 @@ export const useQueryStore = create<QueryState>((set, get) => ({
       const { [id]: _sql, ...restSql } = state.tabSql;
       const { [id]: _exec, ...restExec } = state.executionInfo;
       const { [id]: _res, ...restResults } = state.results;
+      const { [id]: _view, ...restViews } = state.resultViews;
       const { [id]: _pendingCursorOffset, ...restPendingCursorOffsets } = state.pendingCursorOffsets;
       return {
         tabs,
         tabSql: restSql,
         executionInfo: restExec,
         results: restResults,
+        resultViews: restViews,
         pendingCursorOffsets: restPendingCursorOffsets,
         activeTabId:
           state.activeTabId === id
@@ -285,6 +291,7 @@ export const useQueryStore = create<QueryState>((set, get) => ({
       const execution = state.executionInfo[tabId];
       const { [tabId]: _execution, ...executionWithoutRetargetedTab } = state.executionInfo;
       const { [tabId]: _results, ...resultsWithoutRetargetedTab } = state.results;
+      const { [tabId]: _view, ...viewsWithoutRetargetedTab } = state.resultViews;
       return {
         tabs: state.tabs.map((tab) =>
           tab.id === tabId ? { ...tab, ...patch } : tab
@@ -299,9 +306,18 @@ export const useQueryStore = create<QueryState>((set, get) => ({
               }
             : state.executionInfo,
         results: connectionChanged ? resultsWithoutRetargetedTab : state.results,
+        resultViews: connectionChanged ? viewsWithoutRetargetedTab : state.resultViews,
       };
     });
   },
+
+  updateResultView: (tabId, executionId, patch) => set((state) => {
+    const existing = state.resultViews[tabId];
+    const current: QueryResultView = existing?.executionId === executionId
+      ? existing
+      : { executionId, activeTab: "messages", activeResultSetIndex: 0, selectedFirstResult: false, handledErrorKey: "" };
+    return { resultViews: { ...state.resultViews, [tabId]: { ...current, ...patch } } };
+  }),
 
   updateSql: (tabId, sql) =>
     set((state) => ({
@@ -340,11 +356,13 @@ export const useQueryStore = create<QueryState>((set, get) => ({
       const tabSql = { ...state.tabSql };
       const executionInfo = { ...state.executionInfo };
       const results = { ...state.results };
+      const resultViews = { ...state.resultViews };
       const pendingCursorOffsets = { ...state.pendingCursorOffsets };
       for (const id of removedIds) {
         delete tabSql[id];
         delete executionInfo[id];
         delete results[id];
+        delete resultViews[id];
         delete pendingCursorOffsets[id];
       }
 
@@ -354,6 +372,7 @@ export const useQueryStore = create<QueryState>((set, get) => ({
         tabSql,
         executionInfo,
         results,
+        resultViews,
         pendingCursorOffsets,
       };
     });
@@ -372,6 +391,7 @@ export const useQueryStore = create<QueryState>((set, get) => ({
       tabSql: {},
       executionInfo: {},
       results: {},
+      resultViews: {},
       pendingCursorOffsets: {},
     });
   },
@@ -429,6 +449,7 @@ export const useQueryStore = create<QueryState>((set, get) => ({
       tabSql,
       executionInfo: {},
       results: {},
+      resultViews: {},
       pendingCursorOffsets: {},
     });
 
