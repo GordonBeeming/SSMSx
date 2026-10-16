@@ -36,6 +36,7 @@ export function QueryPanel() {
     executeQuery,
     cancelQuery,
     results,
+    executionInfo,
     loadIntelliSense,
     pendingCursorOffsets,
     consumePendingCursorOffset,
@@ -226,6 +227,7 @@ export function QueryPanel() {
               <QueryResultsTable
                 result={activeResult}
                 tabId={activeTabId}
+                executionId={executionInfo[activeTabId]?.requestId}
                 profile={activeProfile}
               />
             </div>

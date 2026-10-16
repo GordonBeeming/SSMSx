@@ -11,7 +11,8 @@ import {
 import { Check, Copy, Rows3 } from "lucide-react";
 import { ContextMenu } from "../../../shared/components/ContextMenu";
 import type { ContextMenuItem } from "../../../shared/components/ContextMenu";
-import type { QueryResult, QueryResultSet } from "../types";
+import { useQueryStore } from "../store/queryStore";
+import type { QueryResult, QueryResultSet, QueryResultView } from "../types";
 import type { ColorProfile } from "../../settings/types";
 import {
   MAX_RESULT_COLUMN_WIDTH,
@@ -24,12 +25,14 @@ interface QueryResultsTableProps {
   result: QueryResult;
   profile: ColorProfile | null;
   tabId: string;
+  executionId?: string | null;
 }
 
 /** Maximum rows to render in the basic table (M4 will replace with virtualization) */
 const MAX_DISPLAY_ROWS = 1000;
 
 type ActiveTab = "results" | "messages";
+
 
 interface CellRef {
   rowIndex: number;
@@ -78,7 +81,7 @@ interface ColumnSizing {
   widths: number[];
 }
 
-export function QueryResultsTable({ result, profile, tabId }: QueryResultsTableProps) {
+export function QueryResultsTable({ result, profile, tabId, executionId = null }: QueryResultsTableProps) {
   const resultSets =
     result.resultSets.length > 0
       ? result.resultSets
@@ -93,18 +96,26 @@ export function QueryResultsTable({ result, profile, tabId }: QueryResultsTableP
     (set) => set.columns.length > 0 || set.rows.length > 0
   );
   const hasData = visibleResultSets.length > 0;
-  const hasMessages = result.messages.length > 0;
   const errorMessageKey = result.messages
     .filter((message) => message.severity === "error")
     .map((message) => `${message.lineNumber ?? ""}:${message.text}`)
     .join("\n");
-  const [activeResultSetIndex, setActiveResultSetIndex] = useState(0);
-
-  // Default tab: Results if we have data, otherwise Messages.
-  // Users can click to switch between them when both exist.
-  const [activeTab, setActiveTab] = useState<ActiveTab>(
-    hasData ? "results" : "messages"
-  );
+  const storedView = useQueryStore((state) => state.resultViews[tabId]);
+  const updateResultView = useQueryStore((state) => state.updateResultView);
+  const view = storedView?.executionId === executionId ? storedView : undefined;
+  const activeTab = view?.activeTab ?? (hasData ? "results" : "messages");
+  const activeResultSetIndex = view?.activeResultSetIndex ?? 0;
+  const selectedFirstResult = view?.selectedFirstResult ?? false;
+  const handledErrorKey = view?.handledErrorKey ?? "";
+  const updateTabView = useCallback((patch: Partial<Omit<QueryResultView, "executionId">>) => {
+    updateResultView(tabId, executionId, patch);
+  }, [tabId, executionId, updateResultView]);
+  const setActiveTab = useCallback((nextTab: ActiveTab) => {
+    updateTabView({ activeTab: nextTab });
+  }, [updateTabView]);
+  const setActiveResultSetIndex = useCallback((index: number) => {
+    updateTabView({ activeResultSetIndex: index });
+  }, [updateTabView]);
   const [selection, setSelection] = useState<CellRange | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [allRowsSelected, setAllRowsSelected] = useState(false);
@@ -121,24 +132,24 @@ export function QueryResultsTable({ result, profile, tabId }: QueryResultsTableP
   // The active/focus cell drives keyboard navigation and single-target copies.
   const focusCell = selection?.focus ?? null;
 
-  // If the situation changes (e.g. a new execution that only produced messages),
-  // snap the active tab back to whichever has content.
+  // Select the first result once; later batches must respect a manual tab choice.
   useEffect(() => {
-    if (activeTab === "results" && !hasData) {
-      setActiveTab("messages");
-    } else if (activeTab === "messages" && !hasMessages && hasData) {
-      setActiveTab("results");
-    }
-    if (activeResultSetIndex >= visibleResultSets.length) {
+    if (!hasData) {
+      if (selectedFirstResult || activeTab !== "messages" || activeResultSetIndex !== 0) {
+        updateTabView({ activeTab: "messages", activeResultSetIndex: 0, selectedFirstResult: false });
+      }
+    } else if (!selectedFirstResult) {
+      updateTabView({ activeTab: "results", activeResultSetIndex: 0, selectedFirstResult: true });
+    } else if (activeResultSetIndex >= visibleResultSets.length) {
       setActiveResultSetIndex(0);
     }
-  }, [hasData, hasMessages, activeTab, activeResultSetIndex, visibleResultSets.length]);
+  }, [hasData, selectedFirstResult, activeTab, activeResultSetIndex, visibleResultSets.length, updateTabView, setActiveResultSetIndex]);
 
   useEffect(() => {
-    if (errorMessageKey) {
-      setActiveTab("messages");
+    if (errorMessageKey && errorMessageKey !== handledErrorKey) {
+      updateTabView({ activeTab: "messages", handledErrorKey: errorMessageKey });
     }
-  }, [errorMessageKey]);
+  }, [errorMessageKey, handledErrorKey, updateTabView]);
 
   const activeResultSet =
     visibleResultSets[activeResultSetIndex] ?? visibleResultSets[0];

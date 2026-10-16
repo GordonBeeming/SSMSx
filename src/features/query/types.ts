@@ -28,6 +28,14 @@ export interface QueryResult {
   totalRows: number;
 }
 
+export interface QueryResultView {
+  executionId: string | null;
+  activeTab: "results" | "messages";
+  activeResultSetIndex: number;
+  selectedFirstResult: boolean;
+  handledErrorKey: string;
+}
+
 export interface QueryTab {
   id: string;
   kind?: "query" | "diagram";

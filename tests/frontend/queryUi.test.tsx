@@ -77,6 +77,7 @@ function resetStores() {
     tabSql: {},
     executionInfo: {},
     results: {},
+    resultViews: {},
     intellisenseCache: {},
     pendingCursorOffsets: {},
   });
@@ -817,4 +818,116 @@ it("captures the database candidate before a connection cancellation clears the 
   } finally {
     useConnectionStore.setState({ cancelConnectionAttempt: originalCancel, activeRequestId: null });
   }
+});
+
+
+describe("first streamed result selection", () => {
+  const messagesOnly: QueryResult = {
+    resultSets: [], columns: [], rows: [],
+    messages: [{ text: "Changed database context.", severity: "info" }],
+    executionTimeMs: 0, totalRows: 0,
+  };
+  const firstResult: QueryResult = {
+    ...messagesOnly,
+    resultSets: [{ columns: [{ name: "sampled", dataType: "bigint", isNullable: false }], rows: [], totalRows: 0 }],
+  };
+
+  it("selects the first columns despite earlier messages and leaves Messages selected through later batches", () => {
+    const view = render(<QueryResultsTable result={messagesOnly} profile={null} tabId="query" executionId="run-1" />);
+    expect(screen.getByRole("region", { name: "Query messages" })).toBeTruthy();
+    view.rerender(<QueryResultsTable result={firstResult} profile={null} tabId="query" executionId="run-1" />);
+    expect(screen.getByRole("grid", { name: "Query results" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Messages (1)" }));
+    const updated = {
+      ...firstResult,
+      resultSets: [{ ...firstResult.resultSets[0], rows: [[6]], totalRows: 1 }, { ...firstResult.resultSets[0], rows: [[4]], totalRows: 1 }],
+      messages: [...messagesOnly.messages, { text: "Execution time: 00:00:02.938", severity: "info" as const }],
+    };
+    view.rerender(<QueryResultsTable result={updated} profile={null} tabId="query" executionId="run-1" />);
+    expect(screen.queryByRole("grid")).toBeNull();
+    expect(screen.getByRole("region", { name: "Query messages" })).toBeTruthy();
+  });
+
+  it("respects Messages even when it has no content and re-arms when a new execution already has results", () => {
+    const noMessages = { ...firstResult, messages: [] };
+    const view = render(<QueryResultsTable result={noMessages} profile={null} tabId="query" executionId="run-1" />);
+    fireEvent.click(screen.getByRole("button", { name: "Messages (0)" }));
+    expect(screen.queryByRole("grid")).toBeNull();
+    view.rerender(<QueryResultsTable result={{ ...noMessages, executionTimeMs: 100 }} profile={null} tabId="query" executionId="run-1" />);
+    expect(screen.queryByRole("grid")).toBeNull();
+    view.rerender(<QueryResultsTable result={noMessages} profile={null} tabId="query" executionId="run-2" />);
+    expect(screen.getByRole("grid", { name: "Query results" })).toBeTruthy();
+  });
+
+  it("does not select results again when returning from another query tab", () => {
+    const view = render(<QueryResultsTable result={firstResult} profile={null} tabId="query-1" executionId="run-1" />);
+    fireEvent.click(screen.getByRole("button", { name: "Messages (1)" }));
+    view.rerender(<QueryResultsTable result={firstResult} profile={null} tabId="query-2" executionId="run-2" />);
+    expect(screen.getByRole("grid", { name: "Query results" })).toBeTruthy();
+    view.rerender(<QueryResultsTable result={firstResult} profile={null} tabId="query-1" executionId="run-1" />);
+    expect(screen.queryByRole("grid")).toBeNull();
+  });
+
+  it("preserves the selected result set when visiting a query without results", () => {
+    const twoResults: QueryResult = {
+      ...firstResult,
+      resultSets: [
+        { ...firstResult.resultSets[0], rows: [[6]], totalRows: 1 },
+        { ...firstResult.resultSets[0], rows: [[4]], totalRows: 1 },
+      ],
+    };
+    const view = render(<QueryResultsTable result={twoResults} profile={null} tabId="query-1" executionId="run-1" />);
+    fireEvent.click(screen.getByRole("button", { name: "Results 2 (1)" }));
+    expect(screen.getByRole("gridcell").textContent).toBe("4");
+    view.rerender(<QueryResultsTable result={messagesOnly} profile={null} tabId="query-2" executionId="run-2" />);
+    expect(screen.queryByRole("grid")).toBeNull();
+    view.rerender(<QueryResultsTable result={twoResults} profile={null} tabId="query-1" executionId="run-1" />);
+    expect(screen.getByRole("gridcell").textContent).toBe("4");
+  });
+
+
+  it("focuses a new error once without overriding a later result choice on tab navigation", () => {
+    const failedResult: QueryResult = { ...firstResult, messages: [{ text: "Statement failed.", severity: "error" }] };
+    const view = render(<QueryResultsTable result={failedResult} profile={null} tabId="query-1" executionId="run-1" />);
+    expect(screen.getByRole("region", { name: "Query messages" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Results (0)" }));
+    view.rerender(<QueryResultsTable result={messagesOnly} profile={null} tabId="query-2" executionId="run-2" />);
+    view.rerender(<QueryResultsTable result={failedResult} profile={null} tabId="query-1" executionId="run-1" />);
+    expect(screen.getByRole("grid", { name: "Query results" })).toBeTruthy();
+    const anotherError: QueryResult = { ...failedResult, messages: [...failedResult.messages, { text: "Another statement failed.", severity: "error" }] };
+    view.rerender(<QueryResultsTable result={anotherError} profile={null} tabId="query-1" executionId="run-1" />);
+    expect(screen.getByRole("region", { name: "Query messages" })).toBeTruthy();
+  });
+
+  it("discards a closed query tab's view so reopening starts with the first result", () => {
+    useQueryStore.setState({
+      tabs: [{ ...tabs[0], id: "query-1", connectionId: null }, { ...tabs[1], id: "query-2", connectionId: null }],
+      activeTabId: "query-1",
+      results: { "query-1": firstResult },
+    });
+    render(<QueryPanel />);
+    fireEvent.click(screen.getByRole("button", { name: "Messages (1)" }));
+    act(() => useQueryStore.getState().removeTab("query-1"));
+    expect(useQueryStore.getState().resultViews["query-1"]).toBeUndefined();
+    act(() => {
+      useQueryStore.getState().addTab({ ...tabs[0], id: "query-1", connectionId: null });
+      useQueryStore.setState({ results: { "query-1": firstResult } });
+    });
+    expect(screen.getByRole("grid", { name: "Query results" })).toBeTruthy();
+  });
+
+
+  it.each(["blank", "diagram"])("keeps Messages selected after visiting a %s tab that unmounts the results table", (kind) => {
+    useQueryStore.setState({ tabs: [{ ...tabs[0], id: "query-1", connectionId: null }], activeTabId: "query-1", results: { "query-1": firstResult } });
+    const view = render(<QueryPanel />);
+    fireEvent.click(screen.getByRole("button", { name: "Messages (1)" }));
+    act(() => useQueryStore.getState().addTab({ id: "other", kind: kind === "diagram" ? "diagram" : "query", connectionId: null, database: "", title: "Other", pinned: false, initialSql: "" }));
+    expect(screen.queryByRole("region", { name: "Query messages" })).toBeNull();
+    if (kind === "diagram") view.unmount();
+    act(() => useQueryStore.getState().setActiveTab("query-1"));
+    if (kind === "diagram") render(<QueryPanel />);
+    expect(screen.getByRole("region", { name: "Query messages" })).toBeTruthy();
+    expect(screen.queryByRole("grid")).toBeNull();
+  });
+
 });
